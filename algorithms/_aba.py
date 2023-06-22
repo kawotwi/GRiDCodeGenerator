@@ -136,7 +136,7 @@ def gen_aba_inner(self, use_thread_group = False):
     # should this be a separate loop
     self.gen_add_code_line("int row = ind % 6; int comp = ind / 6; int jid = comp % " + str(n) + ";")
     self.gen_add_code_line("int jid6 = 6 * jid;")
-    self.gen_add_code_line("T *vcross = {0, s_va[jid6+2], -s_va[jid6+1], 0, s_va[jid6+5], -s_va[jid6+4], -s_va[jid6+2], 0, s_va[jid6+0], -s_va[jid6+5], 0" +
+    self.gen_add_code_line("T vcross[] = {0, s_va[jid6+2], -s_va[jid6+1], 0, s_va[jid6+5], -s_va[jid6+4], -s_va[jid6+2], 0, s_va[jid6+0], -s_va[jid6+5], 0, " +
                     "s_va[jid6+3], s_va[jid6+1], -s_va[jid6+0], 0, s_va[jid6+4], -s_va[jid6+3], 0, 0, 0, 0, 0, s_va[jid6+2], -s_va[jid6+1], 0, 0, 0, -s_va[jid6+2],"+
                     "0, s_va[jid6+0], 0, 0, 0,  s_va[jid6+1], -s_va[jid6+0], 0};")
     
@@ -250,7 +250,7 @@ def gen_aba_inner(self, use_thread_group = False):
             # load in 0 to v 
             self.gen_add_code_line("int jid = " + jid + ";")
             self.gen_add_code_line("int jid6 = 6*" + jid + ";")
-            self.gen_add_code_line("T *gravity_vec = {0,0,0,0,0,gravity};")
+            self.gen_add_code_line("T gravity_vec[] = {0,0,0,0,0,gravity};")
             #does this need to be dot product??
             self.gen_add_code_line("s_va[6*"+str(n)+"+jid6+row] = dot_prod<T,6,6,1>(&s_XImats[36 * jid + row], &gravity_vec[0]) + s_temp[72*"+str(n)+"+jid6+row];")
         # else:
