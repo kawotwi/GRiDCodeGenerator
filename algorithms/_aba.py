@@ -67,7 +67,8 @@ def gen_aba_inner(self, use_thread_group = False):
                 self.gen_add_parallel_loop("row",str(6),use_thread_group)
                 jid = str(inds[0])
             # load in 0 to v 
-            self.gen_add_code_lines(["int jid6 = 6*" + jid + ";", \
+            self.gen_add_code_lines(["int jid = " + jid + ";", \
+                                    "int jid6 = 6*" + jid + ";", \
                                      "s_va[jid6 + row] = static_cast<T>(0);"])
             # add in qd
             self.gen_add_code_line("if (row == " + S_ind_cpp + "){s_va[jid6 + " + S_ind_cpp + "] += s_qd[" + jid + "];}")
@@ -168,7 +169,7 @@ def gen_aba_inner(self, use_thread_group = False):
             jid = "jid"
         else:
             jid = str(inds[0])
-        self.gen_add_code_line("int jid = " + jid + "")
+        self.gen_add_code_line("int jid = " + jid + ";")
         self.gen_add_code_line("int jid6 = 6 * " + jid + ";")
 
         # U[:,ind] = IA[:,:,ind]@S
