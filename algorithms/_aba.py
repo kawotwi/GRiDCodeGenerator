@@ -375,8 +375,7 @@ def gen_aba_kernel(self, use_thread_group = False, single_call_timing = False):
     # tau? qdd?
     shared_mem_vars = ["__shared__ T s_qdd[" + str(n) + "];", \
                         "__shared__ T s_q_qd[2*" + str(n) + "]; T *s_q = s_q_qd; T *s_qd = &s_q_qd[" + str(n) + "];", \
-                        "__shared__ T s_tau[" + str(n)"];"
-                       "__shared__ T s_va[" + str(18*n) + "];"]
+                        "__shared__ T s_tau[" + str(n) + "];", "__shared__ T s_va[" + str(18*n) + "];"]
     self.gen_add_code_lines(shared_mem_vars)
     shared_mem_size = self.gen_aba_inner_temp_mem_size() if not self.use_dynamic_shared_mem_flag else None
     self.gen_XImats_helpers_temp_shared_memory_code(shared_mem_size)
