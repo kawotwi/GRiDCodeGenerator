@@ -308,7 +308,7 @@ def gen_aba_inner_function_call(self, use_thread_group = False, updated_var_name
     if updated_var_names is not None:
         for key,value in updated_var_names.items():
             var_names[key] = value
-    aba_code_start = "aba_inner<T>(" + var_names["s_va_name"] + ", " + var_names["s_q_name"] + ", " + var_names["s_qd_name"] + ", " + var_names["s_qdd_name"] + ", " + var_names["s_tau_name"] + ", "
+    aba_code_start = "aba_inner<T>(" + var_names["s_qdd_name"] + ", " + var_names["s_va_name"] + ", " + var_names["s_q_name"] + ", " + var_names["s_qd_name"] + ", " + var_names["s_tau_name"] + ", "
     aba_code_end = var_names["s_temp_name"] + ", " + var_names["gravity_name"] + ");"
     if use_thread_group:
         id_code_start = id_code_start.replace("(","(tgrp, ")
@@ -387,7 +387,7 @@ def gen_aba_kernel(self, use_thread_group = False, single_call_timing = False):
         self.gen_add_code_line("cgrps::thread_group tgrp = TBD;")
     if not single_call_timing:
         # load to shared mem and loop over blocks to compute all requested comps
-        self.gen_add_parallel_loop("k","NUM_TIMESTEPS",use_thread_group,block_level = True)
+        self.gen_add_parallel_loop("ind","NUM_TIMESTEPS",use_thread_group,block_level = True)
         self.gen_kernel_load_inputs("q_qd","stride_q_qd",str(2*n),use_thread_group)
         # compute
         self.gen_add_code_line("// compute")
@@ -440,7 +440,7 @@ def gen_aba_host(self, mode = 0):
     self.gen_add_code_line(func_def_start)
     self.gen_add_code_line(func_def_end, True)
 
-    func_call_start = "aba_kernel<T><<<block_dimms,thread_dimms,FD_DYNAMIC_SHARED_MEM_COUNT*sizeof(T)>>>(hd_data->d_qdd,hd_data->d_q_qd,stride_q_qd,"
+    func_call_start = "aba_kernel<T><<<block_dimms,thread_dimms,FD_DYNAMIC_SHARED_MEM_COUNT*sizeof(T)>>>(hd_data->d_qdd,hd_data->d_q_qd_u,stride_q_qd,"
     func_call_end = "d_robotModel,gravity,num_timesteps);"
     self.gen_add_code_line("int stride_q_qd = 3*NUM_JOINTS;")
     if single_call_timing:
