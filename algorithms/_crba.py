@@ -25,7 +25,7 @@ def gen_crba_inner_function_call(self, use_thread_group = False, updated_var_nam
         for key,value in updated_var_names.items():
             var_names[key] = value
     
-    id_code = "crba_inner<T>(" + var_names["s_q_name"] + ", " + var_names["s_qd_name"] + ", " +  ", " + var_names["s_H"] + var_names["s_tau"] + ", " + var_names["s_temp_name"] + ", " + var_names["gravity_name"] + ")"
+    id_code = "crba_inner<T>(" + var_names["s_q_name"] + ", " + var_names["s_qd_name"] + ", "  + var_names["s_tau"] + ", " + var_names["s_temp_name"] + ", " + var_names["gravity_name"] + ")"
 
     #what happens if use_thread_group = True
 
@@ -47,7 +47,7 @@ def gen_crba_inner(self, use_thread_group = False):
                     "s_temp is a pointer to helper shared memory of size 6*NUM_JOINTS = " + \
                             str(self.gen_crba_inner_temp_mem_size())]
     func_notes = [] #insert notes abt function 
-    func_def_start = "void crba_inner(const T *s_q, const T *s_qd, const T *s_tau, const T *s_H,"
+    func_def_start = "void crba_inner(const T *s_q, const T *s_qd, const T *s_tau, const T *s_H, const T *s_XImats, "
     func_def_end = "T *s_temp) {"
     if use_thread_group:
         func_def_start = func_def_start.replace("(", "(cgrps::thread_group tgrp, ")
