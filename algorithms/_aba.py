@@ -11,7 +11,7 @@ def gen_aba_inner(self, use_thread_group = False):
                 "s_temp is the pointer to the shared memory needed of size: " + \
                             str(self.gen_forward_dynamics_inner_temp_mem_size()), \
                 "gravity is the gravity constant"]
-    func_def_start = "void aba_inner(T *s_qdd, T *s_va, const T *s_q, const T *s_qd, const T *s_tau, "
+    func_def_start = "void aba_inner(T *s_qdd, T *s_va, const T *s_q, const T *s_qd, const T *s_tau, T *s_XImats, "
     func_def_end = "T *s_temp, const T gravity) {"
     #what goes in func_notes
     func_notes = ["Assumes the XI matricies have already been updated for the given q"]
@@ -105,7 +105,7 @@ def gen_aba_inner(self, use_thread_group = False):
             #this might be in wrong place/need to be in another loop
             #if self.robot.get_parent_id(ind):
             #    c[:,ind] = self.mxS(S,v[:,ind],qd[ind])
-            self.gen_add_code_line("mx2_scaled<T>(&s_temp[72 * " + str(n) + "+jid6], &s_va[jid6], qd[jid]);")
+            self.gen_add_code_line("mx2_scaled<T>(&s_temp[72 * " + str(n) + "+jid6], &s_va[jid6], s_qd[jid]);")
             self.gen_add_end_control_flow()
 
             
@@ -136,7 +136,7 @@ def gen_aba_inner(self, use_thread_group = False):
     self.gen_add_code_line("int jid6 = 6 * jid;")
     self.gen_add_code_line("T *vcross = {0, s_va[jid6+2], -s_va[jid6+1], 0, s_va[jid6+5], -s_va[jid6+4], -s_va[jid6+2], 0, s_va[jid6+0], -s_va[jid6+5], 0" +
                     "s_va[jid6+3], s_va[jid6+1], -s_va[jid6+0], 0, s_va[jid6+4], -s_va[jid6+3], 0, 0, 0, 0, 0, s_va[jid6+2], -s_va[jid6+1], 0, 0, 0, -s_va[jid6+2],"+
-                    "0, s_va[jid6+0], 0, 0, 0,  s_va[jid6+1], -s_va[jid6+0], 0}")
+                    "0, s_va[jid6+0], 0, 0, 0,  s_va[jid6+1], -s_va[jid6+0], 0};")
     
     self.gen_add_code_line("s_temp[98 * " + str(n) + " + jid6 + row] = -1 * dot_prod<T,6,1,1>(&vcross[jid6], &s_XImats[36 * ("+str(n)+"+jid) + row]);")
         
