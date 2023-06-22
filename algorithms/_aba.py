@@ -321,11 +321,12 @@ def gen_aba_device(self, use_thread_group = False):
     # construct the boilerplate and function definition
     func_params = ["s_q is the vector of joint positions", \
                    "s_qd is the vector of joint velocities", \
+                    "s_tau is the vector of joint torques", \
                    "d_robotModel is the pointer to the initialized model specific helpers on the GPU (XImats, topology_helpers, etc.)", \
                    "gravity is the gravity constant"]
     func_notes = []
     func_def_start = "void aba_device("
-    func_def_middle = "const T *s_q, const T *s_qd, "
+    func_def_middle = "const T *s_q, const T *s_qd, const T *s_tau, "
     func_def_end = "const robotModel<T> *d_robotModel, const T gravity) {"
     if use_thread_group:
         func_def_start += "cgrps::thread_group tgrp, "
@@ -342,6 +343,8 @@ def gen_aba_device(self, use_thread_group = False):
     # add the shared memory variables
     shared_mem_size = self.gen_aba_inner_temp_mem_size() if not self.use_dynamic_shared_mem_flag else None
     self.gen_XImats_helpers_temp_shared_memory_code(shared_mem_size)
+
+    self.gen_add_code_line("extern __shared__ T s_va[2*6*7];")
     
     # then load/update XI and run the algo
     self.gen_load_update_XImats_helpers_function_call(use_thread_group)
