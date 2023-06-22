@@ -184,8 +184,8 @@ def gen_aba_inner(self, use_thread_group = False):
         
         # u[ind] = tau[ind]- S^T @ pA[:,ind]
         # S issue
-        self.gen_add_code_line("T tempval = s_temp[42 * " + str(n) + " + jid6 + " + S_ind_cpp +"]") 
-        self.gen_add_code_line("s_temp[97 * " + str(n) + " + jid] = s_tau[jid] - tempval")
+        self.gen_add_code_line("T tempval = s_temp[42 * " + str(n) + " + jid6 + " + S_ind_cpp +"];") 
+        self.gen_add_code_line("s_temp[97 * " + str(n) + " + jid] = s_tau[jid] - tempval;")
 
         # rightSide=np.reshape(U[:,ind],(6,1))@np.reshape(U[:,ind],(6,1)).T/d[ind]
         self.gen_add_code_line("s_temp[36 * "+str(n)+"+jid6+row] = dot_prod<T,6,1,1>(&s_temp[84 * "+str(n)+"+jid6], &s_temp[84 * "+str(n)+"+jid6]) / s_temp[96 *"+str(n)+"+jid];")
@@ -199,7 +199,7 @@ def gen_aba_inner(self, use_thread_group = False):
         if bfs_level != 0:
             # IA[:,:,parent_ind] = IA[:,:,parent_ind] + np.matmul(temp,Xmat)
             # ... indexing
-            self.gen_add_code_line("s_temp[36 * " + parent_ind_cpp + " + jid6 + row] += dot_prod<T,6,6,?>(s_temp[98 * " + str(n) + " + row], s_XImats[6*jid6]);")
+            self.gen_add_code_line("s_temp[36 * " + parent_ind_cpp + " + jid6 + row] += dot_prod<T,6,6,1>(s_temp[98 * " + str(n) + " + row], s_XImats[6*jid6]);")
         self.gen_add_end_control_flow()
     self.gen_add_sync(use_thread_group)
 
