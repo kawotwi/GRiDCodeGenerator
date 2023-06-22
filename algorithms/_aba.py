@@ -448,7 +448,7 @@ def gen_aba_host(self, mode = 0):
     if not compute_only:
         # start code with memory transfer
         self.gen_add_code_lines(["// start code with memory transfer", \
-                                 "gpuErrchk(cudaMemcpyAsync(hd_data->d_q_qd,hd_data->h_q_qd,stride_q_qd*" + \
+                                 "gpuErrchk(cudaMemcpyAsync(hd_data->d_q_qd_u,hd_data->h_q_qd_u,stride_q_qd*" + \
                                     ("num_timesteps*" if not single_call_timing else "") + "sizeof(T),cudaMemcpyHostToDevice,streams[0]));", \
                                  "gpuErrchk(cudaDeviceSynchronize());"])
     # then compute:
