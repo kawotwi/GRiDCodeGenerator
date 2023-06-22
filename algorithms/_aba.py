@@ -447,6 +447,7 @@ def gen_aba_host(self, mode = 0):
                                     ("num_timesteps*" if not single_call_timing else "") + "sizeof(T),cudaMemcpyHostToDevice,streams[0]));", \
                                  "gpuErrchk(cudaDeviceSynchronize());"])
     # then compute:
+    self.gen_add_code_line("int stride_q_qd = 3*NUM_JOINTS;")
     self.gen_add_code_line("// then call the kernel")
     func_call = func_call_start + func_call_end
     func_call_code = [func_call, "gpuErrchk(cudaDeviceSynchronize());"]
