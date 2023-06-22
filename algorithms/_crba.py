@@ -70,18 +70,18 @@ def gen_crba_inner(self, use_thread_group = False):
     parent_offset = ind_offset + 1 #bc parent_ind_cpp is 1 int 
     sval_offset = parent_offset + 1 #bc S_ind_cpp is 1 int 
 
-    self.gen_add_code_line("s_fh = $s_temp[" + str(fh_offset) + "];")
-    self.gen_add_code_line("s_j = $s_temp[" + str(j_offset) + "];")
-    self.gen_add_code_line("s_S = $s_temp[" + str(s_offset) + "];")
-    self.gen_add_code_line("ind = $s_temp[" + str(ind_offset) + "];")
-    self.gen_add_code_line("parent_ind_cpp = $s_temp[" + str(parent_offset) + "];")
-    self.gen_add_code_line("S_ind_cpp = $s_temp[" + str(sval_offset) + "];")
+    self.gen_add_code_line("T *s_fh = &s_temp[" + str(fh_offset) + "];")
+    self.gen_add_code_line("T *s_j = &s_temp[" + str(j_offset) + "];")
+    self.gen_add_code_line("T *s_S = &s_temp[" + str(s_offset) + "];")
+    self.gen_add_code_line("T *ind = &s_temp[" + str(ind_offset) + "];")
+    self.gen_add_code_line("T *parent_ind_cpp = &s_temp[" + str(parent_offset) + "];")
+    self.gen_add_code_line("T *S_ind_cpp = &s_temp[" + str(sval_offset) + "];")
 
     x_offset = 0
     ic_offset = x_offset + 6*6
 
-    self.gen_add_code_line("s_X = $s_XI[" + str(x_offset) + "];")
-    self.gen_add_code_line("s_IC = $s_XI[" + str(ic_offset) + "];")
+    self.gen_add_code_line("T *s_X = &s_XI[" + str(x_offset) + "];")
+    self.gen_add_code_line("T *s_IC = &s_XI[" + str(ic_offset) + "];")
     
     self.gen_add_code_line("//")
     self.gen_add_code_line("// first loop ")
