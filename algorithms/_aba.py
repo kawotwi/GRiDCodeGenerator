@@ -168,16 +168,17 @@ def gen_aba_inner(self, use_thread_group = False):
             jid = "jid"
         else:
             jid = str(inds[0])
+        self.gen_add_code_line("int jid = " + jid + "")
         self.gen_add_code_line("int jid6 = 6 * " + jid + ";")
 
         # U[:,ind] = IA[:,:,ind]@S
         # IA indexing?
-        self.gen_add_code_line("if(row == S_ind_cpp) {s_temp[84 * " + str(n) + " + jid6 + row] += s_temp[6*jid6 + row];}")
+        self.gen_add_code_line("if(row == " + S_ind_cpp + ") {s_temp[84 * " + str(n) + " + jid6 + row] += s_temp[6*jid6 + row];}")
         
         # d[ind] = S @ U[:,ind]
         # a little unsure about the S stuff still
         # should this be in a different loop bc d is a different size?
-        self.gen_add_code_line("if(row == S_ind_cpp) {s_temp[96 * "+ str(n) +" + jid] = s_temp[84 * " + str(n) + " + jid6 + row];}")
+        self.gen_add_code_line("if(row == " + S_ind_cpp + ":) {s_temp[96 * "+ str(n) +" + jid] = s_temp[84 * " + str(n) + " + jid6 + row];}")
         
         # u[ind] = tau[ind]- S^T @ pA[:,ind]
         # S issue
@@ -196,7 +197,7 @@ def gen_aba_inner(self, use_thread_group = False):
         if bfs_level != 0:
             # IA[:,:,parent_ind] = IA[:,:,parent_ind] + np.matmul(temp,Xmat)
             # ... indexing
-            self.gen_add_code_line("s_temp[36 * " + parent_ind_cpp + " + jid6 + row] += dot_prod<T,6,6,?>(s_temp[98 * " + str(n) + " + row], s_s_XImats[6*jid6]);")
+            self.gen_add_code_line("s_temp[36 * " + parent_ind_cpp + " + jid6 + row] += dot_prod<T,6,6,?>(s_temp[98 * " + str(n) + " + row], s_XImats[6*jid6]);")
         self.gen_add_end_control_flow()
     self.gen_add_sync(use_thread_group)
 
