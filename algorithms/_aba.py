@@ -180,7 +180,7 @@ def gen_aba_inner(self, use_thread_group = False):
         # d[ind] = S @ U[:,ind]
         # a little unsure about the S stuff still
         # should this be in a different loop bc d is a different size?
-        self.gen_add_code_line("if(row == " + S_ind_cpp + ":) {s_temp[96 * "+ str(n) +" + jid] = s_temp[84 * " + str(n) + " + jid6 + row];}")
+        self.gen_add_code_line("if(row == " + S_ind_cpp + ") {s_temp[96 * "+ str(n) +" + jid] = s_temp[84 * " + str(n) + " + jid6 + row];}")
         
         # u[ind] = tau[ind]- S^T @ pA[:,ind]
         # S issue
