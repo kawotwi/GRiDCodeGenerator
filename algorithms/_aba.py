@@ -387,7 +387,7 @@ def gen_aba_kernel(self, use_thread_group = False, single_call_timing = False):
         self.gen_add_code_line("cgrps::thread_group tgrp = TBD;")
     if not single_call_timing:
         # load to shared mem and loop over blocks to compute all requested comps
-        self.gen_add_parallel_loop("ind","NUM_TIMESTEPS",use_thread_group,block_level = True)
+        self.gen_add_parallel_loop("k","NUM_TIMESTEPS",use_thread_group,block_level = True)
         self.gen_kernel_load_inputs("q_qd","stride_q_qd",str(2*n),use_thread_group)
         # compute
         self.gen_add_code_line("// compute")
