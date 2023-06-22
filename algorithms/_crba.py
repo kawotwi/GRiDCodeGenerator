@@ -68,7 +68,6 @@ def gen_crba_inner(self, use_thread_group = False):
     ind_offset = s_offset + 6 #bc S is array of 6 ints
     parent_offset = ind_offset + 1 #bc parent_ind_cpp is 1 int 
     sval_offset = parent_offset + 1 #bc S_ind_cpp is 1 int 
-    ss_offset = sval_offset + 1
 
     self.gen_add_code_line("T *s_fh = &s_temp[" + str(fh_offset) + "];")
     self.gen_add_code_line("T *s_j = &s_temp[" + str(j_offset) + "];")
@@ -76,7 +75,6 @@ def gen_crba_inner(self, use_thread_group = False):
     self.gen_add_code_line("T *ind = &s_temp[" + str(ind_offset) + "];")
     self.gen_add_code_line("T *parent_ind_cpp = &s_temp[" + str(parent_offset) + "];")
     self.gen_add_code_line("T *S_ind_cpp = &s_temp[" + str(sval_offset) + "];")
-    self.gen_add_code_line("T *s_S = &s_temp[" + str(ss_offset) + "];")
 
     x_offset = 0
     ic_offset = x_offset + 6*6
@@ -207,7 +205,7 @@ def gen_crba_inner(self, use_thread_group = False):
         #while loop format
         #while self.robot.get_parent_id(ind) > -1:
         if self.robot.get_parent_id(ind) > -1:
-            loop = "while(self.robot.get_parent_id(ind) > -1) {"
+            loop = "while(" + self.robot.get_parent_id(ind) + " > -1) {"
             self.gen_add_code_line(loop)
             self.gen_add_code_line("    int row = ind % 6;")
             #row = ind % 6
@@ -228,7 +226,7 @@ def gen_crba_inner(self, use_thread_group = False):
             j_list = [j]
             #self.gen_add_code_line("j_list = " + str(j_list))
             j_parent_ind_cpp, j_S_ind_cpp = self.gen_topology_helpers_pointers_for_cpp(j_list, NO_GRAD_FLAG = True)
-            init_j = "    j = " + j_parent_ind_cpp + ";"
+            init_j = "    int j = " + j_parent_ind_cpp + ";"
             self.gen_add_code_line(init_j)
 
             #S = self.robot.get_S_by_id(j)
