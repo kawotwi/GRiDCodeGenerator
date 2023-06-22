@@ -68,6 +68,7 @@ def gen_crba_inner(self, use_thread_group = False):
     ind_offset = s_offset + 6 #bc S is array of 6 ints
     parent_offset = ind_offset + 1 #bc parent_ind_cpp is 1 int 
     sval_offset = parent_offset + 1 #bc S_ind_cpp is 1 int 
+    ss_offset = sval_offset + 1
 
     self.gen_add_code_line("T *s_fh = &s_temp[" + str(fh_offset) + "];")
     self.gen_add_code_line("T *s_j = &s_temp[" + str(j_offset) + "];")
@@ -75,6 +76,7 @@ def gen_crba_inner(self, use_thread_group = False):
     self.gen_add_code_line("T *ind = &s_temp[" + str(ind_offset) + "];")
     self.gen_add_code_line("T *parent_ind_cpp = &s_temp[" + str(parent_offset) + "];")
     self.gen_add_code_line("T *S_ind_cpp = &s_temp[" + str(sval_offset) + "];")
+    self.gen_add_code_line("T *s_S = &s_temp[" + str(ss_offset) + "];")
 
     x_offset = 0
     ic_offset = x_offset + 6*6
@@ -147,21 +149,25 @@ def gen_crba_inner(self, use_thread_group = False):
         #S = self.robot.get_S_by_id(ind)
         comment = "// S = self.robot.get_S_by_id(ind)" 
         self.gen_add_code_line(comment)
-        s_S = np.zeros(6)
+        """s_S = "{0, 0, 0, 0, 0, 0}"
         for i in range(6):
             if i == int(S_ind_cpp):
-                s_S[i] += 1
-        self.gen_add_code_line("s_S = " + str(s_S) + ";")
+                s_S[i] += 1   
+        self.gen_add_code_line("s_S = " + str(s_S) + ";") """
 
         #fh = np.matmul(IC[ind], S)
         comment = "// fh = np.matmul(IC[ind], S)" 
         self.gen_add_code_line(comment)
-        self.gen_add_code_line("s_fh = dot_prod<T,6,6,1>(&s_IC[ind], &s_S);")
+        fh_code = "if (ind == " + S_ind_cpp + "){s_fh[ind] = s_IC[ind];} else{s_fh[ind] = 0;}"
+        #self.gen_add_code_line("s_fh = dot_prod<T,6,6,1>(&s_IC[ind], &s_S);")
+        self.gen_add_code_line(fh_code)
 
         #H[ind, ind] = np.matmul(S, fh)
         comment = "// H[ind, ind] = np.matmul(S, fh))" 
         self.gen_add_code_line(comment)
-        self.gen_add_code_line("&s_H[ind][ind] = dot_prod<T,6,6,1>(&s_S, &s_fh);")
+        #self.gen_add_code_line("&s_H[ind][ind] = dot_prod<T,6,6,1>(&s_S, &s_fh);")
+        h_code = "if (ind == " + S_ind_cpp + "){s_H[ind][ind] = &s_fh[ind][ind];} else{s_H[ind][ind] = 0;}"
+        self.gen_add_code_line(h_code)
 
         self.gen_add_end_control_flow()
 
@@ -178,16 +184,18 @@ def gen_crba_inner(self, use_thread_group = False):
         #S = self.robot.get_S_by_id(ind)
         comment = "// S = self.robot.get_S_by_id(ind)" 
         self.gen_add_code_line(comment)
-        s_S = np.zeros(6)
+        """s_S = np.zeros(6)
         for i in range(6):
             if i == int(S_ind_cpp):
                 s_S[i] = 1
-        self.gen_add_code_line("s_S = " + str(s_S) + ";")
+        self.gen_add_code_line("s_S = " + str(s_S) + ";")"""
 
         #fh = np.matmul(IC[ind], S)
         comment = "// fh = np.matmul(IC[ind], S)" 
         self.gen_add_code_line(comment)
-        self.gen_add_code_line("&s_fh = dot_prod<T,6,6,1>(&s_IC[ind], &s_S);")
+        #self.gen_add_code_line("s_fh = dot_prod<T,6,6,1>(&s_IC[ind], &s_S);")
+        fh_code = "if (ind == " + S_ind_cpp + "){s_fh[ind] = s_IC[ind];} else{s_fh[ind] = 0;}"
+        self.gen_add_code_line(fh_code)
 
         #j = ind
         comment = "// s_j = jid" 
@@ -226,16 +234,18 @@ def gen_crba_inner(self, use_thread_group = False):
             #S = self.robot.get_S_by_id(j)
             comment = "    // S = self.robot.get_S_by_id(j)" 
             self.gen_add_code_line(comment)
-            s_S = np.zeros(6)
+            """s_S = np.zeros(6)
             for i in range(6):
                 if i == int(j_S_ind_cpp):
                     s_S[i] = 1
-            self.gen_add_code_line("    s_S = " + str(s_S) + ";")
+            self.gen_add_code_line("    s_S = " + str(s_S) + ";")"""
 
             #H[ind, j] = np.matmul(S.T, fh)
             comment = "    // H[ind, j] = np.matmul(S.T, fh)" 
             self.gen_add_code_line(comment)
-            self.gen_add_code_line("    &s_H[ind,j] = dot_prod<T,6,6,1>(s_S[6*jid6 + row], &s_fh);")
+            #self.gen_add_code_line("    &s_H[ind,j] = dot_prod<T,6,6,1>(s_S[6*jid6 + row], &s_fh);")
+            h_code = "    if (ind == " + S_ind_cpp + "){s_H[ind][j] = &s_fh[ind][ind];} else{s_H[ind][j] = 0;}"
+            self.gen_add_code_line(h_code)
 
             #H[j, ind] = H[ind, j]
             comment = "    // H[j, ind] = H[ind, j]" 
@@ -383,10 +393,7 @@ def gen_crba_host(self, mode = 0):
                                     ("num_timesteps*" if not single_call_timing else "") + "sizeof(T),cudaMemcpyHostToDevice,streams[0]));}", \
                                  "else {stride_q_qd = 3*NUM_JOINTS; " + \
                                     "gpuErrchk(cudaMemcpyAsync(hd_data->d_q_qd_u,hd_data->h_q_qd_u,stride_q_qd*" + \
-                                    ("num_timesteps*" if not single_call_timing else "") + "sizeof(T),cudaMemcpyHostToDevice,streams[0]));}", \
-                                 "if (USE_QDD_FLAG) {gpuErrchk(cudaMemcpyAsync(hd_data->d_qdd,hd_data->h_qdd,NUM_JOINTS*" + \
-                                    ("num_timesteps*" if not single_call_timing else "") + "sizeof(T),cudaMemcpyHostToDevice,streams[1]));}", \
-                                 "gpuErrchk(cudaDeviceSynchronize());"])
+                                    ("num_timesteps*" if not single_call_timing else "") + "sizeof(T),cudaMemcpyHostToDevice,streams[0]));}")
     else:
         self.gen_add_code_line("int stride_q_qd = USE_COMPRESSED_MEM ? 2*NUM_JOINTS: 3*NUM_JOINTS;")
     self.gen_add_code_line("// then call the kernel")
