@@ -98,6 +98,7 @@ def gen_aba_inner(self, use_thread_group = False):
                 self.gen_add_multi_threaded_select("comp_mod", "==", [str(i) for i in range(len(inds))], select_var_vals)
             else:
                 jid = str(inds[0])
+            self.gen_add_code_line("int jid = " + jid + ";")
             self.gen_add_code_line("int jid6 = 6 * " + jid + ";")
             self.gen_add_code_line("T qd_val = (row == " + S_ind_cpp + ") * (s_qd[" + jid + "]);")
             self.gen_add_code_line("// compute based on the branch and use bool multiply for no branch")
@@ -247,6 +248,7 @@ def gen_aba_inner(self, use_thread_group = False):
                 self.gen_add_parallel_loop("row",str(6),use_thread_group)
                 jid = str(inds[0])
             # load in 0 to v 
+            self.gen_add_code_line("int jid = " + jid + ";")
             self.gen_add_code_line("int jid6 = 6*" + jid + ";")
             self.gen_add_code_line("T *gravity_vec = {0,0,0,0,0,gravity};")
             #does this need to be dot product??
@@ -265,6 +267,7 @@ def gen_aba_inner(self, use_thread_group = False):
                 self.gen_add_multi_threaded_select("comp_mod", "==", [str(i) for i in range(len(inds))], select_var_vals)
             else:
                 jid = str(inds[0])
+            self.gen_add_code_line("int jid = " + jid + ";")
             self.gen_add_code_line("int jid6 = 6 * " + jid + ";")
             self.gen_add_code_line("s_va[6*"+str(n)+"+jid6+row] = dot_prod<T,6,6,1>(&s_XImats[36 * jid + row], &s_va[6*"+str(n)+"+(6 * "+parent_ind_cpp+")+row]) + s_temp[72*"+str(n)+"+jid6+row];")
         # temp = u[ind] - np.matmul(np.transpose(U[:,ind]),a[:,ind])
