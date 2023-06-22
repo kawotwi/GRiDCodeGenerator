@@ -205,7 +205,7 @@ def gen_crba_inner(self, use_thread_group = False):
         #while loop format
         #while self.robot.get_parent_id(ind) > -1:
         if self.robot.get_parent_id(ind) > -1:
-            loop = "while(" + self.robot.get_parent_id(ind) + " > -1) {"
+            loop = "while(" + str(self.robot.get_parent_id(ind)) + " > -1) {"
             self.gen_add_code_line(loop)
             self.gen_add_code_line("    int row = ind % 6;")
             #row = ind % 6
