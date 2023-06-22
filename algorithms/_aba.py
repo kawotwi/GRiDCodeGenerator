@@ -2,7 +2,8 @@ def gen_aba_inner(self, use_thread_group = False):
     n = self.robot.get_num_pos()
     n_bfs_levels = self.robot.get_max_bfs_level() + 1 # starts at 0
 	#construct the boilerplate and function definition
-    func_params = ["s_va is a pointer to shared memory of size 2*6*NUM_JOINTS = " + str(12*n), \
+    func_params = ["s_qdd is the vector of joint accelerations", \
+                "s_va is a pointer to shared memory of size 2*6*NUM_JOINTS = " + str(12*n), \
                 "s_q is the vector of joint positions", \
                 "s_qd is the vector of joint velocities", \
                 "s_XImats is the pointer to the transformation and inertia matricies ", \
@@ -10,7 +11,7 @@ def gen_aba_inner(self, use_thread_group = False):
                 "s_temp is the pointer to the shared memory needed of size: " + \
                             str(self.gen_forward_dynamics_inner_temp_mem_size()), \
                 "gravity is the gravity constant"]
-    func_def_start = "void aba_inner(T *s_va, const T *s_q, const T *s_qd, const T *s_tau, "
+    func_def_start = "void aba_inner(T *s_qdd, T *s_va, const T *s_q, const T *s_qd, const T *s_tau, "
     func_def_end = "T *s_temp, const T gravity) {"
     #what goes in func_notes
     func_notes = ["Assumes the XI matricies have already been updated for the given q"]
