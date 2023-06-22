@@ -344,8 +344,8 @@ def gen_aba_device(self, use_thread_group = False):
     shared_mem_size = self.gen_aba_inner_temp_mem_size() if not self.use_dynamic_shared_mem_flag else None
     self.gen_XImats_helpers_temp_shared_memory_code(shared_mem_size)
 
-    self.gen_add_code_line("extern __shared__ T s_va[2*6*n];")
-    self.gen_add_code_line("extern __shared__ T s_qdd[n];")
+    self.gen_add_code_line("extern __shared__ T s_va[2*6*"+ str(n) +"];")
+    self.gen_add_code_line("extern __shared__ T s_qdd[" + str(n) + "];")
     
     # then load/update XI and run the algo
     self.gen_load_update_XImats_helpers_function_call(use_thread_group)
