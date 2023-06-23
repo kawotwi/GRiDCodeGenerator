@@ -174,7 +174,7 @@ def gen_aba_inner(self, use_thread_group = False):
         #self.gen_add_code_line("if(row == " + S_ind_cpp + ") {s_temp[84 * " + str(n) + " + jid6 + row] += s_temp[6*jid6 + row];}")
         self.gen_add_end_control_flow()
 
-        self.gen_add_parallel_loop("ind", str(len(inds)), use_thread_group))
+        self.gen_add_parallel_loop("ind", str(len(inds)), use_thread_group)
         # d[ind] = S @ U[:,ind]
         self.gen_add_code_line("s_temp[96 * "+ str(n) +" + jid] = s_temp[84 * " + str(n) + " + jid6 + " + S_ind_cpp + "];")
         #self.gen_add_code_line("if(row == " + S_ind_cpp + ") {s_temp[96 * "+ str(n) +" + jid] = s_temp[84 * " + str(n) + " + jid6 + row];}")
