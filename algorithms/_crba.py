@@ -11,7 +11,6 @@ def gen_crba_inner_function_call(self, use_thread_group = False, updated_var_nam
         s_H = "s_H", \
         s_q_name = "s_q", \
         s_qd_name = "s_qd", \
-        s_tau = "tau", \
         s_XI = "s_XI", \
         s_temp_name = "s_temp", \
         gravity_name = "gravity"
@@ -19,13 +18,12 @@ def gen_crba_inner_function_call(self, use_thread_group = False, updated_var_nam
     #s_XI calculated in device and allocated in kernel 
     #s_H, temp, q, qd allocated in kernel
     #gravity allocated in host 
-    #where is tau allocated?  
      
     if updated_var_names is not None:
         for key,value in updated_var_names.items():
             var_names[key] = value
     
-    id_code = "crba_inner<T>(" + var_names["s_q_name"] + ", " + var_names["s_qd_name"] + ", "  + var_names["s_tau"] + ", " + var_names["s_temp_name"] + ", " + var_names["gravity_name"] + ")"
+    id_code = "crba_inner<T>(" + var_names["s_q_name"] + ", " + var_names["s_qd_name"] + ", "  + var_names["s_temp_name"] + ", " + var_names["gravity_name"] + ")"
 
     #what happens if use_thread_group = True
 
@@ -38,15 +36,14 @@ def gen_crba_inner(self, use_thread_group = False):
     n_bfs_levels = self.robot.get_max_bfs_level() + 1
 
     #construct the boilerplate and function definition
-    func_params = [ "s_H is a pointer to shared memory of size NUM_JOINTS*NUM_JOINTS = " + str(n*n), \
-                    "s_q is the vector of joint positions", \
+    func_params = [ "s_q is the vector of joint positions", \
                     "s_qd is the vector of joint velocities", \
+                    "s_H is a pointer to shared memory of size NUM_JOINTS*NUM_JOINTS = " + str(n*n), \
                     "s_XI is the pointer to the transformation and inertia matricies ", \
-                    "s_tau is the pointer to the torque", \
                     "s_temp is a pointer to helper shared memory of size 6*NUM_JOINTS = " + \
                             str(self.gen_crba_inner_temp_mem_size())]
     func_notes = [] #insert notes abt function 
-    func_def_start = "void crba_inner(const T *s_q, const T *s_qd, const T *s_tau, const T *s_H, const T *s_XImats, "
+    func_def_start = "void crba_inner(const T *s_q, const T *s_qd, const T *s_H, const T *s_XImats, "
     func_def_end = "T *s_temp) {"
     if use_thread_group:
         func_def_start = func_def_start.replace("(", "(cgrps::thread_group tgrp, ")
@@ -155,7 +152,7 @@ def gen_crba_inner(self, use_thread_group = False):
         #fh = np.matmul(IC[ind], S)
         comment = "// fh = np.matmul(IC[ind], S)" 
         self.gen_add_code_line(comment)
-        fh_code = "if (ind == " + S_ind_cpp + "){s_fh[ind] = s_IC[ind];} else{s_fh[ind] = 0;}"
+        fh_code = "if (ind == " + S_ind_cpp + "){s_fh = s_IC[ind];}"
         #self.gen_add_code_line("s_fh = dot_prod<T,6,6,1>(&s_IC[ind], &s_S);")
         self.gen_add_code_line(fh_code)
 
@@ -163,7 +160,7 @@ def gen_crba_inner(self, use_thread_group = False):
         comment = "// H[ind, ind] = np.matmul(S, fh))" 
         self.gen_add_code_line(comment)
         #self.gen_add_code_line("&s_H[ind][ind] = dot_prod<T,6,6,1>(&s_S, &s_fh);")
-        h_code = "if (ind == " + S_ind_cpp + "){s_H[ind][ind] = &s_fh[ind][ind];} else{s_H[ind][ind] = 0;}"
+        h_code = "if (ind == " + S_ind_cpp + "){s_H[ind][ind] = &s_fh[ind];}"
         self.gen_add_code_line(h_code)
 
         self.gen_add_end_control_flow()
@@ -191,7 +188,7 @@ def gen_crba_inner(self, use_thread_group = False):
         comment = "// fh = np.matmul(IC[ind], S)" 
         self.gen_add_code_line(comment)
         #self.gen_add_code_line("s_fh = dot_prod<T,6,6,1>(&s_IC[ind], &s_S);")
-        fh_code = "if (ind == " + S_ind_cpp + "){s_fh[ind] = s_IC[ind];} else{s_fh[ind] = 0;}"
+        fh_code = "if (ind == " + S_ind_cpp + "){s_fh = s_IC[ind];}"
         self.gen_add_code_line(fh_code)
 
         #j = ind
@@ -203,55 +200,53 @@ def gen_crba_inner(self, use_thread_group = False):
 
         #while loop format
         #while self.robot.get_parent_id(ind) > -1:
-        if self.robot.get_parent_id(ind) > -1:
-            loop = "while(" + str(self.robot.get_parent_id(ind)) + " > -1) {"
-            self.gen_add_code_line(loop)
-            self.gen_add_code_line("    int row = ind % 6;")
-            #row = ind % 6
-            #self.gen_add_code_line("rowwww in if = " + str(row))
-            #Xmat = self.robot.get_Xmat_Func_by_id(ind)(q[ind])
-            comment = "    // Xmat = self.robot.get_Xmat_Func_by_id(ind)(q[ind]) --> as param so don't need to init it now" 
-            self.gen_add_code_line(comment)
-            #self.gen_add_code_line("    s_Xmat = *s_X;")
-    
-            #fh = np.matmul(Xmat.T, fh)
-            comment = "    // fh = np.matmul(Xmat.T, fh)" 
-            self.gen_add_code_line(comment)
-            self.gen_add_code_line("    &s_fh = dot_prod<T,6,6,1>(s_X[6*jid6 + row], &s_fh);")
+        for par in self.robot.get_max_bfs_level(ind):
+            if par > 2:
+                loop = "while(" + str(self.robot.get_parent_id(ind)) + " > -1) {"
+                self.gen_add_code_line(loop)
+                self.gen_add_code_line("    int row = ind % 6;")
+                #Xmat = self.robot.get_Xmat_Func_by_id(ind)(q[ind])
+                comment = "    // Xmat = self.robot.get_Xmat_Func_by_id(ind)(q[ind]) --> as param so don't need to init it now" 
+                self.gen_add_code_line(comment)
+                #self.gen_add_code_line("    s_Xmat = *s_X;")
+        
+                #fh = np.matmul(Xmat.T, fh)
+                comment = "    // fh = np.matmul(Xmat.T, fh)" 
+                self.gen_add_code_line(comment)
+                self.gen_add_code_line("    &s_fh = dot_prod<T,6,6,1>(s_X[6*jid6 + row], &s_fh);")
 
-            #j = self.robot.get_parent_id(j)
-            comment = "    // j = self.robot.get_parent_id(j)" 
-            self.gen_add_code_line(comment)
-            j_list = [j]
-            #self.gen_add_code_line("j_list = " + str(j_list))
-            j_parent_ind_cpp, j_S_ind_cpp = self.gen_topology_helpers_pointers_for_cpp(j_list, NO_GRAD_FLAG = True)
-            init_j = "    int j = " + j_parent_ind_cpp + ";"
-            self.gen_add_code_line(init_j)
+                #j = self.robot.get_parent_id(j)
+                comment = "    // j = self.robot.get_parent_id(j)" 
+                self.gen_add_code_line(comment)
+                j_list = [j]
+                j_parent_ind_cpp, j_S_ind_cpp = self.gen_topology_helpers_pointers_for_cpp(j_list, NO_GRAD_FLAG = True)
+                init_j = "    int j = " + j_parent_ind_cpp + ";"
+                self.gen_add_code_line(init_j)
 
-            #S = self.robot.get_S_by_id(j)
-            comment = "    // S = self.robot.get_S_by_id(j)" 
-            self.gen_add_code_line(comment)
-            """s_S = np.zeros(6)
-            for i in range(6):
-                if i == int(j_S_ind_cpp):
-                    s_S[i] = 1
-            self.gen_add_code_line("    s_S = " + str(s_S) + ";")"""
+                #S = self.robot.get_S_by_id(j)
+                comment = "    // S = self.robot.get_S_by_id(j)" 
+                self.gen_add_code_line(comment)
+                """s_S = np.zeros(6)
+                for i in range(6):
+                    if i == int(j_S_ind_cpp):
+                        s_S[i] = 1
+                self.gen_add_code_line("    s_S = " + str(s_S) + ";")"""
 
-            #H[ind, j] = np.matmul(S.T, fh)
-            comment = "    // H[ind, j] = np.matmul(S.T, fh)" 
-            self.gen_add_code_line(comment)
-            #self.gen_add_code_line("    &s_H[ind,j] = dot_prod<T,6,6,1>(s_S[6*jid6 + row], &s_fh);")
-            h_code = "    if (ind == " + S_ind_cpp + "){s_H[ind][j] = &s_fh[ind][ind];} else{s_H[ind][j] = 0;}"
-            self.gen_add_code_line(h_code)
+                #H[ind, j] = np.matmul(S.T, fh)
+                comment = "    // H[ind, j] = np.matmul(S.T, fh)" 
+                self.gen_add_code_line(comment)
+                #self.gen_add_code_line("    &s_H[ind,j] = dot_prod<T,6,6,1>(s_S[6*jid6 + row], &s_fh);")
+                h_code = "    if (ind == " + S_ind_cpp + "){s_H[ind][j] = &s_fh[ind];}"
+                self.gen_add_code_line(h_code)
 
-            #H[j, ind] = H[ind, j]
-            comment = "    // H[j, ind] = H[ind, j]" 
-            self.gen_add_code_line(comment)
-            self.gen_add_code_line("    &s_H[j,ind] = &s_H[ind,j];")
+                #H[j, ind] = H[ind, j]
+                comment = "    // H[j, ind] = H[ind, j]" 
+                self.gen_add_code_line(comment)
+                self.gen_add_code_line("    &s_H[j,ind] = &s_H[ind,j];")
 
-            self.gen_add_code_line("}")
+                self.gen_add_code_line("}")
 
-        self.gen_add_end_control_flow()
+            self.gen_add_end_control_flow()
   
     self.gen_add_sync(use_thread_group)
     self.gen_add_code_line("return &s_H;") 
@@ -268,12 +263,11 @@ def gen_crba_device(self, use_thread_group = False):
     # construct the boilerplate and function definition
     func_params = ["s_q is the vector of joint positions", \
                    "s_qd is the vector of joint velocities", \
-                   "s_tau is the pointer to the torque", \
                    "d_robotModel is the pointer to the initialized model specific helpers on the GPU (XImats, topology_helpers, etc.)", \
                    "gravity is the gravity constant"]
     func_notes = []
     func_def_start = "void crba_device("
-    func_def_middle = "const T *s_q, const T *s_qd, const T *s_tau,"
+    func_def_middle = "const T *s_q, const T *s_qd,"
     func_def_end = "const robotModel<T> *d_robotModel, const T gravity) {"
     if use_thread_group:
         func_def_start += "cgrps::thread_group tgrp, "
