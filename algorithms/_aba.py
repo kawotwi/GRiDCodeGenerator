@@ -104,7 +104,6 @@ def gen_aba_inner(self, use_thread_group = False):
             self.gen_add_code_line("// compute based on the branch and use bool multiply for no branch")
             self.gen_add_code_line("s_va[jid6 + row] = dot_prod<T,6,6,1>(&s_XImats[6*jid6 + row], &s_va[6*" + parent_ind_cpp + "]) + qd_val;")
             
-            #this might be in wrong place/need to be in another loop
             #if self.robot.get_parent_id(ind):
             #    c[:,ind] = self.mxS(S,v[:,ind],qd[ind])
             self.gen_add_code_line("mx2_scaled<T>(&s_temp[72 * " + str(n) + "+jid6], &s_va[jid6], s_qd[jid]);")
@@ -128,12 +127,10 @@ def gen_aba_inner(self, use_thread_group = False):
         self.gen_add_code_line("printf(\"c after first loop\\n\"); printMat<T,6,"+str(n)+">(&s_temp[72 * "+str(n)+"], 6);")
 
     self.gen_add_code_line("// Initialize IA = I")
-    # what is the max for this loop????
     self.gen_add_parallel_loop("ind",str(36*n),use_thread_group)
     self.gen_add_code_line("s_temp[ind] = s_XImats[" + str(36*n) + " + ind];")
     # self.gen_add_end_control_flow()
     
-    # should this be a separate loop
     self.gen_add_code_line("int row = ind % 6; int comp = ind / 6; int jid = comp % " + str(n) + ";")
     self.gen_add_code_line("int jid6 = 6 * jid;")
     self.gen_add_code_line("T vcross[] = {0, s_va[jid6+2], -s_va[jid6+1], 0, s_va[jid6+5], -s_va[jid6+4], -s_va[jid6+2], 0, s_va[jid6+0], -s_va[jid6+5], 0, " +
@@ -161,7 +158,6 @@ def gen_aba_inner(self, use_thread_group = False):
     for bfs_level in range(n_bfs_levels - 1, -1, -1): # don't consider level 0 as parent is root
         inds = self.robot.get_ids_by_bfs_level(bfs_level)
         parent_ind_cpp, S_ind_cpp = self.gen_topology_helpers_pointers_for_cpp(inds, NO_GRAD_FLAG = True)
-        #where did 6 come from
         self.gen_add_parallel_loop("ind", str(6*len(inds)), use_thread_group)
         self.gen_add_code_line("int row = ind % 6; int comp = ind / 6; int comp_mod = comp % " + str(len(inds)) + ";")
         if len(inds) > 1:
@@ -174,14 +170,14 @@ def gen_aba_inner(self, use_thread_group = False):
         self.gen_add_code_line("int jid6 = 6 * " + jid + ";")
 
         # U[:,ind] = IA[:,:,ind]@S
-        # IA indexing?
         self.gen_add_code_line("s_temp[84*7+jid6+row] += s_temp[36*jid+row+6*("+ S_ind_cpp+")];")
         #self.gen_add_code_line("if(row == " + S_ind_cpp + ") {s_temp[84 * " + str(n) + " + jid6 + row] += s_temp[6*jid6 + row];}")
-        
+        self.gen_add_end_control_flow()
+
+        self.gen_add_parallel_loop("ind", str(len(inds), use_thread_group))
         # d[ind] = S @ U[:,ind]
-        # a little unsure about the S stuff still
-        # should this be in a different loop bc d is a different size?
-        self.gen_add_code_line("if(row == " + S_ind_cpp + ") {s_temp[96 * "+ str(n) +" + jid] = s_temp[84 * " + str(n) + " + jid6 + row];}")
+        self.gen_add_code_line("s_temp[96 * "+ str(n) +" + jid] = s_temp[84 * " + str(n) + " + jid6 + " + S_ind_cpp + "];")
+        #self.gen_add_code_line("if(row == " + S_ind_cpp + ") {s_temp[96 * "+ str(n) +" + jid] = s_temp[84 * " + str(n) + " + jid6 + row];}")
         
         # u[ind] = tau[ind]- S^T @ pA[:,ind]
         # S issue
@@ -194,12 +190,9 @@ def gen_aba_inner(self, use_thread_group = False):
         # Ia = IA[:,:,ind] - rightSide
         self.gen_add_code_line("s_temp[36 * "+str(n)+"+jid6+row] = s_temp[6*jid6 + row] - s_temp[36 * "+str(n)+"+jid6+row];")
         # temp = np.matmul(np.transpose(Xmat), Ia)
-        # indexing here is wrong
         self.gen_add_code_line("s_temp[98 * " + str(n) + " + jid6 + row] = dot_prod<T,6,1,1>(&s_XImats[6*jid6+row], &s_temp[36 * "+str(n)+"+jid6]);")
-        # and then this is 6 by 6 so like whats the situation??
         if bfs_level != 0:
             # IA[:,:,parent_ind] = IA[:,:,parent_ind] + np.matmul(temp,Xmat)
-            # ... indexing
             self.gen_add_code_line("s_temp[36 * " + parent_ind_cpp + " + jid6 + row] += dot_prod<T,6,6,1>(&s_temp[98 * " + str(n) + " + row], &s_XImats[6*jid6]);")
         self.gen_add_end_control_flow()
     self.gen_add_sync(use_thread_group)
@@ -252,7 +245,6 @@ def gen_aba_inner(self, use_thread_group = False):
             self.gen_add_code_line("int jid = " + jid + ";")
             self.gen_add_code_line("int jid6 = 6*" + jid + ";")
             self.gen_add_code_line("T gravity_vec[] = {0,0,0,0,0,gravity};")
-            #does this need to be dot product??
             self.gen_add_code_line("s_va[6*"+str(n)+"+jid6+row] = dot_prod<T,6,6,1>(&s_XImats[36 * jid + row], &gravity_vec[0]) + s_temp[72*"+str(n)+"+jid6+row];")
         # else:
         #     a[:,ind] = np.matmul(Xmat, a[:,parent_ind]) + c[:,ind]
@@ -273,8 +265,6 @@ def gen_aba_inner(self, use_thread_group = False):
             self.gen_add_code_line("s_va[6*"+str(n)+"+jid6+row] = dot_prod<T,6,6,1>(&s_XImats[36 * jid + row], &s_va[6*"+str(n)+"+(6 * "+parent_ind_cpp+")+row]) + s_temp[72*"+str(n)+"+jid6+row];")
         # temp = u[ind] - np.matmul(np.transpose(U[:,ind]),a[:,ind])
         # qdd[ind] = temp / d[ind]
-        #should this be a separate loop?
-        # i don't think this line is correct
         self.gen_add_code_line("T tempval = s_temp[97 * "+str(n)+"+jid] - dot_prod<T,6,1,1>(&s_temp[84*"+str(n)+"+jid6], &s_va[6*"+str(n)+"+jid6]);")
         self.gen_add_code_line("s_qdd[jid] = tempval / s_temp[96*"+str(n)+"+jid];")
 
