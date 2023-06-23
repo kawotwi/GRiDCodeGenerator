@@ -175,7 +175,8 @@ def gen_aba_inner(self, use_thread_group = False):
 
         # U[:,ind] = IA[:,:,ind]@S
         # IA indexing?
-        self.gen_add_code_line("if(row == " + S_ind_cpp + ") {s_temp[84 * " + str(n) + " + jid6 + row] += s_temp[6*jid6 + row];}")
+        self.gen_add_code_line("s_temp[84*7+jid6+row] += s_temp[36*jid+row+6*("+ S_ind_cpp+")];")
+        #self.gen_add_code_line("if(row == " + S_ind_cpp + ") {s_temp[84 * " + str(n) + " + jid6 + row] += s_temp[6*jid6 + row];}")
         
         # d[ind] = S @ U[:,ind]
         # a little unsure about the S stuff still
