@@ -200,7 +200,7 @@ def gen_crba_inner(self, use_thread_group = False):
 
         #while loop format
         #while self.robot.get_parent_id(ind) > -1:
-        for par in self.robot.get_max_bfs_level():
+        for par in range(self.robot.get_max_bfs_level()):
             if par > 2:
                 loop = "while(" + str(self.robot.get_parent_id(ind)) + " > -1) {"
                 self.gen_add_code_line(loop)
