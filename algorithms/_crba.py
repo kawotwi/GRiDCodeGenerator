@@ -8,10 +8,9 @@ def gen_crba_inner_temp_mem_size(self):
 
 def gen_crba_inner_function_call(self, use_thread_group = False, updated_var_names = None):
     var_names = dict( \
-        s_H = "s_H", \
+        s_H_name = "s_H", \
         s_q_name = "s_q", \
         s_qd_name = "s_qd", \
-        s_XI = "s_XI", \
         s_temp_name = "s_temp", \
         gravity_name = "gravity"
     )
@@ -38,13 +37,14 @@ def gen_crba_inner(self, use_thread_group = False):
     #construct the boilerplate and function definition
     func_params = [ "s_q is the vector of joint positions", \
                     "s_qd is the vector of joint velocities", \
-                    "s_H is a pointer to shared memory of size NUM_JOINTS*NUM_JOINTS = " + str(n*n), \
+                    "s_H is a pointer to the matrix of inertia" \
                     "s_XI is the pointer to the transformation and inertia matricies ", \
                     "s_temp is a pointer to helper shared memory of size 6*NUM_JOINTS = " + \
-                            str(self.gen_crba_inner_temp_mem_size())]
+                            str(self.gen_crba_inner_temp_mem_size()), \
+                    "gravity is the gravity constant"]
     func_notes = [] #insert notes abt function 
-    func_def_start = "void crba_inner(const T *s_q, const T *s_qd, const T *s_H, const T *s_XImats, "
-    func_def_end = "T *s_temp) {"
+    func_def_start = "void crba_inner(T *s_H, const T *s_q, const T *s_qd,"
+    func_def_end = "T *s_temp, const T gravity) {"
     if use_thread_group:
         func_def_start = func_def_start.replace("(", "(cgrps::thread_group tgrp, ")
         func_params.insert(0,"tgrp is the handle to the thread_group running this function")
@@ -202,8 +202,8 @@ def gen_crba_inner(self, use_thread_group = False):
         #while self.robot.get_parent_id(ind) > -1:
         for par in range(self.robot.get_max_bfs_level()):
             if par > 2:
-                loop = "while(" + str(self.robot.get_parent_id(ind)) + " > -1) {"
-                self.gen_add_code_line(loop)
+                #loop = "while(" + str(self.robot.get_parent_id(ind)) + " > -1) {"
+                #self.gen_add_code_line(loop)
                 self.gen_add_code_line("    int row = ind % 6;")
                 #Xmat = self.robot.get_Xmat_Func_by_id(ind)(q[ind])
                 comment = "    // Xmat = self.robot.get_Xmat_Func_by_id(ind)(q[ind]) --> as param so don't need to init it now" 
@@ -213,7 +213,7 @@ def gen_crba_inner(self, use_thread_group = False):
                 #fh = np.matmul(Xmat.T, fh)
                 comment = "    // fh = np.matmul(Xmat.T, fh)" 
                 self.gen_add_code_line(comment)
-                self.gen_add_code_line("    &s_fh = dot_prod<T,6,6,1>(s_X[6*jid6 + row], &s_fh);")
+                self.gen_add_code_line("    s_fh = dot_prod<T,6,6,1>(s_X[6*jid6 + row], &s_fh);")
 
                 #j = self.robot.get_parent_id(j)
                 comment = "    // j = self.robot.get_parent_id(j)" 
@@ -236,17 +236,17 @@ def gen_crba_inner(self, use_thread_group = False):
                 comment = "    // H[ind, j] = np.matmul(S.T, fh)" 
                 self.gen_add_code_line(comment)
                 #self.gen_add_code_line("    &s_H[ind,j] = dot_prod<T,6,6,1>(s_S[6*jid6 + row], &s_fh);")
-                h_code = "    if (ind == " + S_ind_cpp + "){s_H[ind][j] = &s_fh[ind];}"
+                h_code = "    if (ind == " + S_ind_cpp + ") {s_H[ind][j] = &s_fh[ind];}"
                 self.gen_add_code_line(h_code)
 
                 #H[j, ind] = H[ind, j]
                 comment = "    // H[j, ind] = H[ind, j]" 
                 self.gen_add_code_line(comment)
-                self.gen_add_code_line("    &s_H[j,ind] = &s_H[ind,j];")
+                self.gen_add_code_line("    s_H[j,ind] = &s_H[ind,j];")
 
-                self.gen_add_code_line("}")
+                #self.gen_add_code_line("}")
 
-            self.gen_add_end_control_flow()
+        self.gen_add_end_control_flow()
   
     self.gen_add_sync(use_thread_group)
     self.gen_add_code_line("return &s_H;") 
@@ -261,13 +261,14 @@ def gen_crba_device(self, use_thread_group = False):
     n = self.robot.get_num_pos()
 
     # construct the boilerplate and function definition
-    func_params = ["s_q is the vector of joint positions", \
+    func_params = ["s_H is a pointer to the matrix of inertia", \
+                   "s_q is the vector of joint positions", \
                    "s_qd is the vector of joint velocities", \
                    "d_robotModel is the pointer to the initialized model specific helpers on the GPU (XImats, topology_helpers, etc.)", \
                    "gravity is the gravity constant"]
     func_notes = []
     func_def_start = "void crba_device("
-    func_def_middle = "const T *s_q, const T *s_qd,"
+    func_def_middle = "T *s_H, const T *s_q, const T *s_qd,"
     func_def_end = "const robotModel<T> *d_robotModel, const T gravity) {"
     if use_thread_group:
         func_def_start += "cgrps::thread_group tgrp, "
