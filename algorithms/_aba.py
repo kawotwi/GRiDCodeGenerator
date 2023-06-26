@@ -175,6 +175,14 @@ def gen_aba_inner(self, use_thread_group = False):
         self.gen_add_end_control_flow()
 
         self.gen_add_parallel_loop("ind", str(len(inds)), use_thread_group)
+        if len(inds) > 1:
+            select_var_vals = [("int", "jid", [str(jid) for jid in inds])]
+            self.gen_add_multi_threaded_select("ind", "<", [str(6*(i+1)) for i in range(len(inds))], select_var_vals)
+            jid = "jid"
+        else:
+            jid = str(inds[0])
+        self.gen_add_code_line("int jid = " + jid + ";")
+        self.gen_add_code_line("int jid6 = 6 * " + jid + ";")
         # d[ind] = S @ U[:,ind]
         self.gen_add_code_line("s_temp[96 * "+ str(n) +" + jid] = s_temp[84 * " + str(n) + " + jid6 + " + S_ind_cpp + "];")
         #self.gen_add_code_line("if(row == " + S_ind_cpp + ") {s_temp[96 * "+ str(n) +" + jid] = s_temp[84 * " + str(n) + " + jid6 + row];}")
