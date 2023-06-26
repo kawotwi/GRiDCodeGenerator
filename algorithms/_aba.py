@@ -159,7 +159,7 @@ def gen_aba_inner(self, use_thread_group = False):
         inds = self.robot.get_ids_by_bfs_level(bfs_level)
         parent_ind_cpp, S_ind_cpp = self.gen_topology_helpers_pointers_for_cpp(inds, NO_GRAD_FLAG = True)
         self.gen_add_parallel_loop("ind", str(6*len(inds)), use_thread_group)
-        self.gen_add_code_line("int row = ind % 6; int comp = ind / 6; int comp_mod = comp % " + str(len(inds)) + ";")
+        self.gen_add_code_line("int row = ind % 6; int comp = ind / 6;")
         if len(inds) > 1:
             select_var_vals = [("int", "jid", [str(jid) for jid in inds])]
             self.gen_add_multi_threaded_select("ind", "<", [str(6*(i+1)) for i in range(len(inds))], select_var_vals)
@@ -173,9 +173,10 @@ def gen_aba_inner(self, use_thread_group = False):
         self.gen_add_code_line("s_temp[84*7+jid6+row] += s_temp[36*jid+row+6*("+ S_ind_cpp+")];")
         #self.gen_add_code_line("if(row == " + S_ind_cpp + ") {s_temp[84 * " + str(n) + " + jid6 + row] += s_temp[6*jid6 + row];}")
         self.gen_add_end_control_flow()
+        self.gen_add_sync(use_thread_group)
 
         self.gen_add_parallel_loop("ind", str(len(inds)), use_thread_group)
-        self.gen_add_code_line("int row = ind % 6; int comp = ind / 6; int comp_mod = comp % " + str(len(inds)) + ";")
+        self.gen_add_code_line("int row = ind % 6; int comp = ind / 6;")
         if len(inds) > 1:
             select_var_vals = [("int", "jid", [str(jid) for jid in inds])]
             self.gen_add_multi_threaded_select("ind", "<", [str(6*(i+1)) for i in range(len(inds))], select_var_vals)
@@ -192,6 +193,8 @@ def gen_aba_inner(self, use_thread_group = False):
         self.gen_add_code_line("T tempval = s_temp[42 * " + str(n) + " + jid6 + " + S_ind_cpp +"];") 
         self.gen_add_code_line("s_temp[97 * " + str(n) + " + jid] = s_tau[jid] - tempval;")
         self.gen_add_end_control_flow()
+        self.gen_add_sync(use_thread_group)
+        
 
         self.gen_add_parallel_loop("ind", str(36 * len(inds)), use_thread_group)
         self.gen_add_code_line("int row = ind % 6; int col = ind / (6*"+str(len(inds))+");")
@@ -211,14 +214,17 @@ def gen_aba_inner(self, use_thread_group = False):
         #self.gen_add_code_line("s_temp[36 * "+str(n)+"+jid6+row] = dot_prod<T,6,1,1>(&s_temp[84 * "+str(n)+"+jid6], &s_temp[84 * "+str(n)+"+jid6]) / s_temp[96 *"+str(n)+"+jid];")
 
         # Ia = IA[:,:,ind] - rightSide
-        self.gen_add_code_line()
-        self.gen_add_code_line("s_temp[36 * "+str(n)+"+jid6+row] = s_temp[6*jid6 + row] - s_temp[36 * "+str(n)+"+jid6+row];")
+        self.gen_add_code_line("s_temp[36 * "+str(n)+"+6*jid6+row+6*col] = s_temp[6*jid6+row+6*col] - s_temp[36 * "+str(n)+"+6*jid6+row+6*col];")
+        #self.gen_add_code_line("s_temp[36 * "+str(n)+"+jid6+row] = s_temp[6*jid6 + row] - s_temp[36 * "+str(n)+"+jid6+row];")
         # temp = np.matmul(np.transpose(Xmat), Ia)
-        self.gen_add_code_line("s_temp[98 * " + str(n) + " + jid6 + row] = dot_prod<T,6,1,1>(&s_XImats[6*jid6+row], &s_temp[36 * "+str(n)+"+jid6]);")
+        self.gen_add_code_line("s_temp[98 * " + str(n) + " + row + 6*col] = dot_prod<T,6,1,1>(&s_XImats[6*jid6+6*row], &s_temp[36 * "+str(n)+"+jid6*6+6*col]);")
+        #self.gen_add_code_line("s_temp[98 * " + str(n) + " + jid6 + row] = dot_prod<T,6,1,1>(&s_XImats[6*jid6+row], &s_temp[36 * "+str(n)+"+jid6]);")
         if bfs_level != 0:
             # IA[:,:,parent_ind] = IA[:,:,parent_ind] + np.matmul(temp,Xmat)
-            self.gen_add_code_line("s_temp[36 * " + parent_ind_cpp + " + jid6 + row] += dot_prod<T,6,6,1>(&s_temp[98 * " + str(n) + " + row], &s_XImats[jid6]);")
+            self.gen_add_code_line("s_temp[36 * " + parent_ind_cpp +" + row + 6*col] += dot_prod<T,6,6,1>(&s_temp[98 * " + str(n) + " + row], &s_XImats[6*jid6+6*col]);")
+            #self.gen_add_code_line("s_temp[36 * " + parent_ind_cpp + " + jid6 + row] += dot_prod<T,6,6,1>(&s_temp[98 * " + str(n) + " + row], &s_XImats[jid6]);")
         self.gen_add_end_control_flow()
+        self.gen_add_sync(use_thread_group)
     self.gen_add_sync(use_thread_group)
 
     if self.DEBUG_MODE:
