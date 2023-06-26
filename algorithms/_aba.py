@@ -191,17 +191,33 @@ def gen_aba_inner(self, use_thread_group = False):
         # u[ind] = tau[ind]- S^T @ pA[:,ind]
         self.gen_add_code_line("T tempval = s_temp[42 * " + str(n) + " + jid6 + " + S_ind_cpp +"];") 
         self.gen_add_code_line("s_temp[97 * " + str(n) + " + jid] = s_tau[jid] - tempval;")
+        self.gen_add_end_control_flow()
+
+        self.gen_add_parallel_loop("ind", str(36 * len(inds)), use_thread_group)
+        self.gen_add_code_line("int row = ind % 6; int col = ind / (6*"+str(len(inds))+");")
+        #self.gen_add_code_line("int row = ind % 6; int comp = ind / 6; int comp_mod = comp % " + str(len(inds)) + ";")
+        if len(inds) > 1:
+            select_var_vals = [("int", "jid", [str(jid) for jid in inds])]
+            self.gen_add_multi_threaded_select("ind", "<", [str(6*(i+1)) for i in range(len(inds))], select_var_vals)
+            jid = "jid"
+        else:
+            jid = str(inds[0])
+        self.gen_add_code_line("int jid = " + jid + ";")
+        self.gen_add_code_line("int jid6 = 6 * " + jid + ";")
 
         # rightSide=np.reshape(U[:,ind],(6,1))@np.reshape(U[:,ind],(6,1)).T/d[ind]
-        self.gen_add_code_line("s_temp[36 * "+str(n)+"+jid6+row] = dot_prod<T,6,1,1>(&s_temp[84 * "+str(n)+"+jid6], &s_temp[84 * "+str(n)+"+jid6]) / s_temp[96 *"+str(n)+"+jid];")
+        self.gen_add_code_line("s_temp[36 * "+str(n)+"+6*jid6+row+6*col] = s_temp[84*"+str(n)+"+jid6+row]*s_temp[84*"+str(n)+"+jid6+col]/s_temp[96 *"+str(n)+"+jid];")
+                               #dot_prod<T,6,1,1>(&s_temp[84 * "+str(n)+"+jid6], &s_temp[84 * "+str(n)+"+jid6]) / s_temp[96 *"+str(n)+"+jid];")
+        #self.gen_add_code_line("s_temp[36 * "+str(n)+"+jid6+row] = dot_prod<T,6,1,1>(&s_temp[84 * "+str(n)+"+jid6], &s_temp[84 * "+str(n)+"+jid6]) / s_temp[96 *"+str(n)+"+jid];")
 
         # Ia = IA[:,:,ind] - rightSide
+        self.gen_add_code_line()
         self.gen_add_code_line("s_temp[36 * "+str(n)+"+jid6+row] = s_temp[6*jid6 + row] - s_temp[36 * "+str(n)+"+jid6+row];")
         # temp = np.matmul(np.transpose(Xmat), Ia)
         self.gen_add_code_line("s_temp[98 * " + str(n) + " + jid6 + row] = dot_prod<T,6,1,1>(&s_XImats[6*jid6+row], &s_temp[36 * "+str(n)+"+jid6]);")
         if bfs_level != 0:
             # IA[:,:,parent_ind] = IA[:,:,parent_ind] + np.matmul(temp,Xmat)
-            self.gen_add_code_line("s_temp[36 * " + parent_ind_cpp + " + jid6 + row] += dot_prod<T,6,6,1>(&s_temp[98 * " + str(n) + " + row], &s_XImats[6*jid6]);")
+            self.gen_add_code_line("s_temp[36 * " + parent_ind_cpp + " + jid6 + row] += dot_prod<T,6,6,1>(&s_temp[98 * " + str(n) + " + row], &s_XImats[jid6]);")
         self.gen_add_end_control_flow()
     self.gen_add_sync(use_thread_group)
 
@@ -354,14 +370,14 @@ def gen_aba_device(self, use_thread_group = False):
 def gen_aba_kernel(self, use_thread_group = False, single_call_timing = False):
     n = self.robot.get_num_pos()
     # define function def and params
-    func_params = ["d_q_qd is the vector of joint positions and velocities", \
+    func_params = ["d_q_qd_tau is the vector of joint positions and velocities", \
                     "stride_q_qd is the stride between each q, qd", \
                     "d_robotModel is the pointer to the initialized model specific helpers on the GPU (XImats, topology_helpers, etc.)", \
                     "d_tau is the vector of joint torques", \
                     "gravity is the gravity constant", \
                     "num_timesteps is the length of the trajectory points we need to compute over (or overloaded as test_iters for timing)"]
     func_notes = []
-    func_def_start = "void aba_kernel(T *d_qdd, const T *d_q_qd, const int stride_q_qd, "
+    func_def_start = "void aba_kernel(T *d_qdd, const T *d_q_qd_tau, const int stride_q_qd, "
     func_def_end = "const robotModel<T> *d_robotModel, const T gravity, const int NUM_TIMESTEPS) {"
     func_def = func_def_start + func_def_end
     if single_call_timing:
@@ -377,8 +393,7 @@ def gen_aba_kernel(self, use_thread_group = False, single_call_timing = False):
     # add shared memory variables
     # tau? qdd?
     shared_mem_vars = ["__shared__ T s_qdd[" + str(n) + "];", \
-                        "__shared__ T s_q_qd_tau[2*" + str(n) + "]; T *s_q = s_q_qd; T *s_qd = &s_q_qd[" + str(n) + "];", \
-                        "T *s_tau = s_q_qd[2 * " + str(n) + "];", \
+                        "__shared__ T s_q_qd_tau[3*" + str(n) + "]; T *s_q = s_q_qd_tau; T *s_qd = &s_q_qd_tau[" + str(n) + "]; T *s_tau = &s_q_qd_tau[2 * " + str(n) + "];", \
                         "__shared__ T s_va[" + str(18*n) + "];"]
     self.gen_add_code_lines(shared_mem_vars)
     shared_mem_size = self.gen_aba_inner_temp_mem_size() if not self.use_dynamic_shared_mem_flag else None
@@ -400,7 +415,7 @@ def gen_aba_kernel(self, use_thread_group = False, single_call_timing = False):
         self.gen_add_end_control_flow()
     else:
         #repurpose NUM_TIMESTEPS for number of timing reps
-        self.gen_kernel_load_inputs_single_timing("q_qd",str(2*n),use_thread_group)
+        self.gen_kernel_load_inputs_single_timing("q_qd_tau",str(3*n),use_thread_group)
         # then compute in loop for timing
         self.gen_add_code_line("// compute with NUM_TIMESTEPS as NUM_REPS for timing")
         self.gen_add_code_line("for (int rep = 0; rep < NUM_TIMESTEPS; rep++){", True)
