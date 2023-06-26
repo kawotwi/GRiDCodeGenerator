@@ -376,8 +376,9 @@ def gen_aba_kernel(self, use_thread_group = False, single_call_timing = False):
     # add shared memory variables
     # tau? qdd?
     shared_mem_vars = ["__shared__ T s_qdd[" + str(n) + "];", \
-                        "__shared__ T s_q_qd[2*" + str(n) + "]; T *s_q = s_q_qd; T *s_qd = &s_q_qd[" + str(n) + "];", \
-                        "__shared__ T s_tau[" + str(n) + "];", "__shared__ T s_va[" + str(18*n) + "];"]
+                        "__shared__ T s_q_qd_tau[2*" + str(n) + "]; T *s_q = s_q_qd; T *s_qd = &s_q_qd[" + str(n) + "];", \
+                        "T *s_tau = s_q_qd[2 * " + str(n) + "];", \
+                        "__shared__ T s_va[" + str(18*n) + "];"]
     self.gen_add_code_lines(shared_mem_vars)
     shared_mem_size = self.gen_aba_inner_temp_mem_size() if not self.use_dynamic_shared_mem_flag else None
     self.gen_XImats_helpers_temp_shared_memory_code(shared_mem_size)
@@ -386,7 +387,7 @@ def gen_aba_kernel(self, use_thread_group = False, single_call_timing = False):
     if not single_call_timing:
         # load to shared mem and loop over blocks to compute all requested comps
         self.gen_add_parallel_loop("k","NUM_TIMESTEPS",use_thread_group,block_level = True)
-        self.gen_kernel_load_inputs("q_qd","stride_q_qd",str(2*n),use_thread_group)
+        self.gen_kernel_load_inputs("q_qd_tau","stride_q_qd",str(3*n),use_thread_group)
         # compute
         self.gen_add_code_line("// compute")
         self.gen_load_update_XImats_helpers_function_call(use_thread_group)
