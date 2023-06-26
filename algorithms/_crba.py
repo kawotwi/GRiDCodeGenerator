@@ -44,7 +44,7 @@ def gen_crba_inner(self, use_thread_group = False):
                             str(self.gen_crba_inner_temp_mem_size()), \
                     "gravity is the gravity constant"]
     func_notes = [] #insert notes abt function 
-    func_def_start = "void crba_inner(T *s_H, const T *s_q, const T *s_qd, const, T *s_XImats,"
+    func_def_start = "void crba_inner(T *s_H, const T *s_q, const T *s_qd, const T *s_XImats,"
     func_def_end = "T *s_temp, const T gravity) {"
     if use_thread_group:
         func_def_start = func_def_start.replace("(", "(cgrps::thread_group tgrp, ")
