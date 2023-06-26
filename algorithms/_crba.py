@@ -372,7 +372,7 @@ def gen_crba_host(self, mode = 0):
     self.gen_add_code_line("__host__")
     self.gen_add_code_line(func_def_start)
     self.gen_add_code_line(func_def_end, True)
-    func_call_start = "crba_kernel<T><<<block_dimms,thread_dimms,ID_DYNAMIC_SHARED_MEM_COUNT*sizeof(T)>>>(hd_data->d_h,hd_data->d_q_qd,stride_q_qd,"
+    func_call_start = "crba_kernel<T><<<block_dimms,thread_dimms,ID_DYNAMIC_SHARED_MEM_COUNT*sizeof(T)>>>(hd_data->d_H,hd_data->d_q_qd,stride_q_qd,"
     func_call_end = "d_robotModel,gravity,num_timesteps);"
     if single_call_timing:
         func_call_start = func_call_start.replace("kernel<T>","kernel_single_timing<T>")
@@ -403,7 +403,7 @@ def gen_crba_host(self, mode = 0):
     if not compute_only:
         # then transfer memory back
         self.gen_add_code_lines(["// finally transfer the result back", \
-                                 "gpuErrchk(cudaMemcpy(hd_data->h_h,hd_data->d_h,NUM_JOINTS*" + \
+                                 "gpuErrchk(cudaMemcpy(hd_data->h_H,hd_data->d_H,NUM_JOINTS*" + \
                                     ("num_timesteps*" if not single_call_timing else "") + "sizeof(T),cudaMemcpyDeviceToHost));",
                                  "gpuErrchk(cudaDeviceSynchronize());"])
     # finally report out timing if requested
