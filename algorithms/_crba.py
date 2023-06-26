@@ -78,6 +78,8 @@ def gen_crba_inner(self, use_thread_group = False):
 
     self.gen_add_code_line("T *s_X = &s_XImats[" + str(x_offset) + "];")
     self.gen_add_code_line("T *s_IC = &s_XImats[" + str(ic_offset) + "];")
+
+    self.gen_add_code_line("printf(" + "testing" + ");S")
     
     self.gen_add_code_line("//")
     self.gen_add_code_line("// first loop ")
