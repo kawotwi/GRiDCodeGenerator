@@ -292,7 +292,7 @@ def gen_aba_inner(self, use_thread_group = False):
                 jid = str(inds[0])
             self.gen_add_code_line("int jid = " + jid + ";")
             self.gen_add_code_line("int jid6 = 6 * " + jid + ";")
-            self.gen_add_code_line("s_va[6*"+str(n)+"+jid6+row] = dot_prod<T,6,6,1>(&s_XImats[36 * jid + row], &s_va[6*"+str(n)+"+(6 * "+parent_ind_cpp+")+row]) + s_temp[72*"+str(n)+"+jid6+row];")
+            self.gen_add_code_line("s_va[6*"+str(n)+"+jid6+row] = dot_prod<T,6,6,1>(&s_XImats[36 * jid + row], &s_va[6*"+str(n)+"+(6 * "+parent_ind_cpp+")]) + s_temp[72*"+str(n)+"+jid6+row];")
         # temp = u[ind] - np.matmul(np.transpose(U[:,ind]),a[:,ind])
         # qdd[ind] = temp / d[ind]
         self.gen_add_code_line("T tempval = s_temp[97 * "+str(n)+"+jid] - dot_prod<T,6,1,1>(&s_temp[84*"+str(n)+"+jid6], &s_va[6*"+str(n)+"+jid6]);")
@@ -300,7 +300,7 @@ def gen_aba_inner(self, use_thread_group = False):
 
         # a[:,ind] = a[:,ind] + qdd[ind]*S
         self.gen_add_code_line("T qdd_val = (row == " + S_ind_cpp + ") * (s_qdd[jid]);")
-        self.gen_add_code_line("s_va[6*"+str(n)+"+jid6+row] = s_va[6*"+str(n)+"+jid6] + qdd_val;")
+        self.gen_add_code_line("s_va[6*"+str(n)+"+jid6+row] += qdd_val;")
 
         self.gen_add_end_control_flow()
         self.gen_add_sync(use_thread_group)
