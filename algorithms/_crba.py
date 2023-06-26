@@ -12,6 +12,7 @@ def gen_crba_inner_function_call(self, use_thread_group = False, updated_var_nam
         s_q_name = "s_q", \
         s_qd_name = "s_qd", \
         s_temp_name = "s_temp", \
+        s_XI = "s_XImats", \
         gravity_name = "gravity"
     )
     #s_XI calculated in device and allocated in kernel 
@@ -22,7 +23,7 @@ def gen_crba_inner_function_call(self, use_thread_group = False, updated_var_nam
         for key,value in updated_var_names.items():
             var_names[key] = value
     
-    id_code = "crba_inner<T>(" + var_names["s_q_name"] + ", " + var_names["s_qd_name"] + ", "  + var_names["s_temp_name"] + ", " + var_names["gravity_name"] + ")"
+    id_code = "crba_inner<T>(" + var_names["s_q_name"] + ", " + var_names["s_qd_name"] + ", "  + var_names["s_temp_name"] + ", " + var_names["gravity_name"] + ", " +var_names["s_XI"] + ")"
 
     #what happens if use_thread_group = True
 
