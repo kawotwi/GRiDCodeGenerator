@@ -204,7 +204,7 @@ def gen_crba_inner(self, use_thread_group = False):
         for par in range(self.robot.get_max_bfs_level()):
             if j_int > 2:
                 #loop = "while(" + str(self.robot.get_parent_id(par)) + " > -1) {"
-                loop = "loop {"
+                loop = "while(j_int > 2) {"
                 self.gen_add_code_line(loop, True)
                 self.gen_add_code_line("int row = ind % 6;")
                 #Xmat = self.robot.get_Xmat_Func_by_id(ind)(q[ind])
