@@ -308,7 +308,8 @@ def gen_crba_device(self, use_thread_group = False):
 def gen_crba_kernel(self, use_thread_group = False, single_call_timing = False):
     n = self.robot.get_num_pos()
 
-    #self.gen_add_code_line("printf(\"testing kernel\");")
+    self.gen_add_code_line("printf(\"testing kernel\");\n")
+    #print("testing kernel \n")
     # define function def and params
     func_params = ["d_H is the matrix of output Inertia", \
                    "d_q_dq is the vector of joint positions and velocities", \
@@ -364,6 +365,7 @@ def gen_crba_kernel(self, use_thread_group = False, single_call_timing = False):
 def gen_crba_host(self, mode = 0):
 
     #self.gen_add_code_line("printf(\"testing host\");")
+    print("testing host")
     # default is to do the full kernel call -- options are for single timing or compute only kernel wrapper
     single_call_timing = True if mode == 1 else False
     compute_only = True if mode == 2 else False
