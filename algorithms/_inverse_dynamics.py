@@ -305,7 +305,7 @@ def gen_inverse_dynamics_inner(self, use_thread_group = False, compute_c = False
 
 def gen_inverse_dynamics_device_temp_mem_size(self, compute_c = False):
     n = self.robot.get_num_pos()
-    wrapper_size = (18*n if compute_c else 0) + self.gen_topology_helpers_size() + 72*n # for XImats
+    wrapper_size = (18*n if compute_c else 0) + self.gen_topology_helpers_size() + self.gen_get_XI_size() # for XImats
     return self.gen_inverse_dynamics_inner_temp_mem_size() + wrapper_size
 
 def gen_inverse_dynamics_device(self, use_thread_group = False, compute_c = False, use_qdd_input = False):

@@ -92,7 +92,7 @@ def gen_add_multi_threaded_select(self, loop_counter, comparator, counts, select
     # then if many things to select gen it and branch
     if len(select_tuples) > 1 and not USE_NON_BRANCH_ALWAYS:
         self.gen_add_code_line("// branch to get pointer locations")
-        # init pointers outside fo select
+        # init pointers outside of select
         self.gen_add_code_line("; ".join(dst_code)  + ";")
         # if / else if / else to select pointers
         n = len(counts)

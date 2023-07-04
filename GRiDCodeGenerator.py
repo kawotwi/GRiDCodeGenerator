@@ -8,8 +8,9 @@ class GRiDCodeGenerator:
                          gen_kernel_load_inputs_single_timing, gen_kernel_save_result_single_timing, \
                          gen_static_array_ind_2d, gen_static_array_ind_3d, \
                          gen_mx_func_call_for_cpp, gen_spatial_algebra_helpers, \
-                         gen_init_XImats, gen_load_update_XImats_helpers_temp_mem_size, gen_load_update_XImats_helpers_function_call, \
+                         gen_get_XI_size, gen_init_XImats, gen_load_update_XImats_helpers_temp_mem_size, gen_load_update_XImats_helpers_function_call, \
                          gen_XImats_helpers_temp_shared_memory_code, gen_load_update_XImats_helpers, gen_topology_helpers_size, \
+                         gen_get_Xhom_size, gen_load_update_XmatsHom_helpers, gen_load_update_XmatsHom_helpers_function_call, gen_XmatsHom_helpers_temp_shared_memory_code, \
                          gen_topology_sparsity_helpers_python, gen_init_topology_helpers, gen_topology_helpers_pointers_for_cpp, \
                          gen_insert_helpers_function_call, gen_insert_helpers_func_def_params, gen_init_robotModel
 
@@ -27,7 +28,10 @@ class GRiDCodeGenerator:
                             gen_inverse_dynamics_gradient_kernel, gen_inverse_dynamics_gradient_host, gen_inverse_dynamics_gradient, \
                             gen_forward_dynamics_gradient_inner_temp_mem_size, gen_forward_dynamics_gradient_kernel_max_temp_mem_size, \
                             gen_forward_dynamics_gradient_inner_python, gen_forward_dynamics_gradient_device, gen_forward_dynamics_gradient_kernel, \
-                            gen_forward_dynamics_gradient_host, gen_forward_dynamics_gradient
+                            gen_forward_dynamics_gradient_host, gen_forward_dynamics_gradient, \
+                            gen_end_effector_positions_inner_temp_mem_size, gen_end_effector_positions_inner_function_call, gen_end_effector_positions_inner, \
+                            gen_end_effector_positions_device_temp_mem_size, gen_end_effector_positions_device, gen_end_effector_positions_kernel, \
+                            gen_end_effector_positions_host, gen_eepos_and_gradient
 
     # finally import the test code
     from ._test import test_rnea_fpass, test_rnea_bpass, test_rnea, test_minv_bpass, test_minv_fpass, test_densify_Minv, test_minv, test_rnea_grad_inner, \
@@ -65,14 +69,16 @@ class GRiDCodeGenerator:
             "#define time_delta_us_timespec(start,end) (1e6*static_cast<double>(end.tv_sec - start.tv_sec)+1e-3*static_cast<double>(end.tv_nsec - start.tv_nsec))"])
         self.gen_add_code_line("")
 
-    def gen_add_constants_helpers(self):
+    def gen_add_constants_helpers(self, include_base_inertia = False, include_homogenous_transforms = False):
         # first add constants
         n = self.robot.get_num_pos()
-        XI_size = 72*n
+        XI_size = self.gen_get_XI_size(include_base_inertia,include_homogenous_transforms)
+        XHom_size = self.gen_get_Xhom_size()
         dva_cols_per_partial = self.robot.get_total_ancestor_count() + n
         max_threads_in_comp_loop = 6*2*dva_cols_per_partial
         suggested_threads = 32 * int(np.ceil(max_threads_in_comp_loop/32.0))
         self.gen_add_code_lines(["const int NUM_JOINTS = " + str(self.robot.get_num_pos()) + ";", \
+                                 "const int NUM_EES = " + str(self.robot.get_total_leaf_nodes()) + ";", \
                                  "const int ID_DYNAMIC_SHARED_MEM_COUNT = " + str(self.gen_inverse_dynamics_inner_temp_mem_size() + XI_size) + ";", \
                                  "const int MINV_DYNAMIC_SHARED_MEM_COUNT = " + str(self.gen_direct_minv_inner_temp_mem_size() + XI_size) + ";", \
                                  "const int FD_DYNAMIC_SHARED_MEM_COUNT = " + str(self.gen_forward_dynamics_inner_temp_mem_size() + XI_size) + ";", \
@@ -80,6 +86,7 @@ class GRiDCodeGenerator:
                                  "const int FD_DU_DYNAMIC_SHARED_MEM_COUNT = " + str(self.gen_forward_dynamics_gradient_inner_temp_mem_size() + XI_size) + ";", \
                                  "const int ID_DU_MAX_SHARED_MEM_COUNT = " + str(int(self.gen_inverse_dynamics_gradient_kernel_max_temp_mem_size()) + XI_size) + ";", \
                                  "const int FD_DU_MAX_SHARED_MEM_COUNT = " + str(int(self.gen_forward_dynamics_gradient_kernel_max_temp_mem_size()) + XI_size) + ";", \
+                                 "const int EE_POS_SHARED_MEM_COUNT = " + str(int(self.gen_end_effector_positions_inner_temp_mem_size()) + XHom_size) + ";", \
                                  "const int SUGGESTED_THREADS = " + str(min(suggested_threads, 512)) + ";"]) # max of 512 to avoid exceeding available registers
         # then the structs
         # first add the struct
@@ -105,12 +112,14 @@ class GRiDCodeGenerator:
                                  "    T *d_qdd;", \
                                  "    T *d_dc_du;", \
                                  "    T *d_df_du;", \
+                                 "    T *d_eePos;", \
                                  "    // CPU OUTPUTS", \
                                  "    T *h_c;", \
                                  "    T *h_Minv;", \
                                  "    T *h_qdd;", \
                                  "    T *h_dc_du;", \
                                  "    T *h_df_du;", \
+                                 "    T *h_eePos;", \
                                  "};"])
 
     def gen_init_gridData(self):
@@ -129,12 +138,14 @@ class GRiDCodeGenerator:
                       "gpuErrchk(cudaMalloc((void**)&hd_data->d_qdd, NUM_JOINTS*NUM_TIMESTEPS*sizeof(T)));", \
                       "gpuErrchk(cudaMalloc((void**)&hd_data->d_dc_du, NUM_JOINTS*2*NUM_JOINTS*NUM_TIMESTEPS*sizeof(T)));", \
                       "gpuErrchk(cudaMalloc((void**)&hd_data->d_df_du, NUM_JOINTS*2*NUM_JOINTS*NUM_TIMESTEPS*sizeof(T)));", \
+                      "gpuErrchk(cudaMalloc((void**)&hd_data->d_eePos, 6*NUM_EES*NUM_TIMESTEPS*sizeof(T)));", \
                       "// and the CPU", \
                       "hd_data->h_c = (T *)malloc(NUM_JOINTS*NUM_TIMESTEPS*sizeof(T));", \
                       "hd_data->h_Minv = (T *)malloc(NUM_JOINTS*NUM_JOINTS*NUM_TIMESTEPS*sizeof(T));", \
                       "hd_data->h_qdd = (T *)malloc(NUM_JOINTS*NUM_JOINTS*NUM_TIMESTEPS*sizeof(T));", \
                       "hd_data->h_dc_du = (T *)malloc(NUM_JOINTS*2*NUM_JOINTS*NUM_TIMESTEPS*sizeof(T));", \
                       "hd_data->h_df_du = (T *)malloc(NUM_JOINTS*2*NUM_JOINTS*NUM_TIMESTEPS*sizeof(T));", \
+                      "hd_data->h_eePos = (T *)malloc(6*NUM_EES*NUM_TIMESTEPS*sizeof(T));", \
                       "return hd_data;"]
         # generate as templated or not function
         self.gen_add_func_doc("Allocated device and host memory for all computations",
@@ -195,10 +206,10 @@ class GRiDCodeGenerator:
         self.gen_add_code_lines(["gpuErrchk(cudaFree(d_robotModel));", \
                                  "gpuErrchk(cudaFree(hd_data->d_q_qd_u)); gpuErrchk(cudaFree(hd_data->d_q_qd)); gpuErrchk(cudaFree(hd_data->d_q));", \
                                  "gpuErrchk(cudaFree(hd_data->d_c)); gpuErrchk(cudaFree(hd_data->d_Minv)); gpuErrchk(cudaFree(hd_data->d_qdd));", \
-                                 "gpuErrchk(cudaFree(hd_data->d_dc_du)); gpuErrchk(cudaFree(hd_data->d_df_du));", \
+                                 "gpuErrchk(cudaFree(hd_data->d_dc_du)); gpuErrchk(cudaFree(hd_data->d_df_du)); gpuErrchk(cudaFree(hd_data->d_eePos));", \
                                  "free(hd_data->h_q_qd_u); free(hd_data->h_q_qd); free(hd_data->h_q);", \
                                  "free(hd_data->h_c); free(hd_data->h_Minv); free(hd_data->h_qdd);", \
-                                 "free(hd_data->h_dc_du); free(hd_data->h_df_du);", \
+                                 "free(hd_data->h_dc_du); free(hd_data->h_df_du); free(hd_data->h_eePos);", \
                                  "for(int i=0; i<" + str(MAX_STREAMS) + "; i++){gpuErrchk(cudaStreamDestroy(streams[i]));} free(streams);"])
         self.gen_add_end_function()
         
@@ -238,7 +249,7 @@ class GRiDCodeGenerator:
             self.gen_add_end_function()
 
     # finally generate all of the code
-    def gen_all_code(self, use_thread_group = False, include_base_inertia = False):
+    def gen_all_code(self, use_thread_group = False, include_base_inertia = False, include_homogenous_transforms = False):
         # first generate the file info
         file_notes = [ "Interface is:", \
             "    __host__   robotModel<T> *d_robotModel = init_robotModel<T>()", \
@@ -246,23 +257,30 @@ class GRiDCodeGenerator:
             "    __host__   gridData<T> *hd_ata = init_gridData<T,NUM_TIMESTEPS>();"
             "    __host__   close_grid<T>(cudaStream_t *streams, robotModel<T> *d_robotModel, gridData<T> *hd_data)", \
             "",\
+            "    __device__ inverse_dynamics_inner<T>(T *s_c,  T *s_vaf, const T *s_q, const T *s_qd, const T *s_qdd, T *s_XImats, int *s_topology_helpers, T *s_temp, const T gravity)",\
+            "    __device__ inverse_dynamics_inner<T>(T *s_c,  T *s_vaf, const T *s_q, const T *s_qd, T *s_XImats, int *s_topology_helpers, T *s_temp, const T gravity)",\
             "    __device__ inverse_dynamics_device<T>(T *s_c, const T *s_q, const T *s_qd, const robotModel<T> *d_robotModel, const T gravity)", \
             "    __device__ inverse_dynamics_device<T>(T *s_c, const T *s_q, const T *s_qd, const T *s_qdd, const robotModel<T> *d_robotModel, const T gravity)", \
             "    __global__ inverse_dynamics_kernel<T>(T *d_c, const T *d_q_qd, const robotModel<T> *d_robotModel, const T gravity, const int NUM_TIMESTEPS)", \
             "    __global__ inverse_dynamics_kernel<T>(T *d_c, const T *d_q_qd, const T *d_qdd, const robotModel<T> *d_robotModel, const T gravity, const int NUM_TIMESTEPS)", \
             "    __host__   inverse_dynamics<T,USE_QDD_FLAG=false,USE_COMPRESSED_MEM=false>(gridData<T> *hd_data, const robotModel<T> *d_robotModel, const T gravity, const int num_timesteps, const dim3 block_dimms, const dim3 thread_dimms, cudaStream_t *streams)", \
             "",\
+            "    __device__ inverse_dynamics_inner_vaf<T>(T *s_vaf, const T *s_q, const T *s_qd, const T *s_qdd, T *s_XImats, int *s_topology_helpers, T *s_temp, const T gravity)",\
+            "    __device__ inverse_dynamics_inner_vaf<T>(T *s_vaf, const T *s_q, const T *s_qd, T *s_XImats, int *s_topology_helpers, T *s_temp, const T gravity)",\
             "    __device__ inverse_dynamics_vaf_device<T>(T *s_vaf, const T *s_q, const T *s_qd, const robotModel<T> *d_robotModel, const T gravity)", \
             "    __device__ inverse_dynamics_vaf_device<T>(T *s_vaf, const T *s_q, const T *s_qd, const T *s_qdd, const robotModel<T> *d_robotModel, const T gravity)", \
             "",\
+            "    __device__ direct_minv_inner<T>(T *s_Minv, const T *s_q, T *s_XImats, int *s_topology_helpers, T *s_temp)",\
             "    __device__ direct_minv_device<T>(T *s_Minv, const T *s_q, const robotModel<T> *d_robotModel)", \
             "    __global__ direct_minv_Kernel<T>(T *d_Minv, const T *d_q, const robotModel<T> *d_robotModel, const int NUM_TIMESTEPS)", \
             "    __host__   direct_minv<T,USE_COMPRESSED_MEM=false>(gridData<T> *hd_data, const robotModel<T> *d_robotModel, const int num_timesteps, const dim3 block_dimms, const dim3 thread_dimms, cudaStream_t *streams)", \
             "",\
+            "    __device__ forward_dynamics_inner<T>(T *s_qdd, const T *s_q, const T *s_qd, const T *s_u, T *s_XImats, int *s_topology_helpers, T *s_temp, const T gravity)",\
             "    __device__ forward_dynamics_device<T>(T *s_qdd, const T *s_q, const T *s_qd, const T *s_u, const robotModel<T> *d_robotModel, const T gravity)", \
             "    __global__ forward_dynamics_kernel<T>(T *d_qdd, const T *d_q_qd_u, const robotModel<T> *d_robotModel, const T gravity, const int NUM_TIMESTEPS)", \
             "    __host__   forward_dynamics<T>(gridData<T> *hd_data, const robotModel<T> *d_robotModel, const T gravity, const int num_timesteps, const dim3 block_dimms, const dim3 thread_dimms, cudaStream_t *streams)", \
             "",\
+            "    __device__ inverse_dynamics_gradient_inner<T>(T *s_dc_du, const T *s_q, const T *s_qd, const T *s_vaf, T *s_XImats, int *s_topology_helpers, T *s_temp, const T gravity)",\
             "    __device__ inverse_dynamics_gradient_device<T>(T *s_dc_du, const T *s_q, const T *s_qd, const T *robotModel<T> *d_robotModel, const T gravity)", \
             "    __device__ inverse_dynamics_gradient_device<T>(T *s_dc_du, const T *s_q, const T *s_qd, const T *s_qdd, const robotModel<T> *d_robotModel, const T gravity)", \
             "    __global__ inverse_dynamics_gradient_kernel<T>(T *d_dc_du, const T *d_q_qd, const robotModel<T> *d_robotModel, const T gravity, const int NUM_TIMESTEPS)", \
@@ -274,6 +292,11 @@ class GRiDCodeGenerator:
             "    __global__ forward_dynamics_gradient_kernel<T>(T *d_df_du, const T *d_q_qd_u, const robotModel<T> *d_robotModel, const T gravity, const int NUM_TIMESTEPS)", \
             "    __global__ forward_dynamics_gradient_kernel<T>(T *d_df_du, const T *d_q_qd, const T *d_qdd, const T *d_Minv, const robotModel<T> *d_robotModel, const T gravity, const int NUM_TIMESTEPS)", \
             "    __host__   forward_dynamics_gradient<T,USE_QDD_MINV_FLAG=false>(gridData<T> *hd_data, const robotModel<T> *d_robotModel, const T gravity, const int num_timesteps, const dim3 block_dimms, const dim3 thread_dimms, cudaStream_t *streams)", \
+            "",\
+            "    __device__ end_effector_positions_inner<T>(T *s_eePos, const T *s_q, const T *s_Xhom, int *s_topology_helpers, T *s_temp)", \
+            "    __device__ end_effector_positions_device<T>(T *s_eePos, const T *s_q, const robotModel<T> *d_robotModel)", \
+            "    __global__ end_effector_positions_kernel<T>(T *d_eePos, const T *d_q, const robotModel<T> *d_robotModel, const int NUM_TIMESTEPS)", \
+            "    __host__   end_effector_positions_host<T,USE_COMPRESSED_MEM=false>(gridData<T> *hd_data, const robotModel<T> *d_robotModel, const int num_timesteps, const dim3 block_dimms, const dim3 thread_dimms, cudaStream_t *streams)", \
             "","Suggested Type T is float",\
             "","Additional helper functions and ALGORITHM_inner functions which take in __shared__ memory temp variables exist -- see function descriptions in the file",\
             "","By default device and kernels need to be launched with dynamic shared mem of size <FUNC_CODE>_DYNAMIC_SHARED_MEM_COUNT where <FUNC_CODE> = [ID, MINV, FD, ID_DU, FD_DU]"]
@@ -286,16 +309,20 @@ class GRiDCodeGenerator:
         self.gen_add_func_doc("All functions are kept in this namespace")
         self.gen_add_code_line("namespace " + self.file_namespace + " {", True)
         # then generate any constants and other helpers
-        self.gen_add_constants_helpers()
+        self.gen_add_constants_helpers(include_base_inertia, include_homogenous_transforms)
         # then the spatial algebra related helpers
         self.gen_spatial_algebra_helpers()
         # then generate the robot specific transformation and inertia matricies
         self.gen_init_topology_helpers()
-        self.gen_init_XImats(include_base_inertia)
+        self.gen_init_XImats(include_base_inertia,include_homogenous_transforms)
         self.gen_init_robotModel()
         self.gen_init_gridData()
         self.gen_load_update_XImats_helpers(use_thread_group)
-        # then generate the robot optimized algorithms
+        if include_homogenous_transforms:
+            self.gen_load_update_XmatsHom_helpers(use_thread_group)
+        # then generate kinematic algorithms
+        self.gen_eepos_and_gradient()
+        # then generate the dynamics algorithms
         self.gen_inverse_dynamics(use_thread_group)
         self.gen_direct_minv(use_thread_group)
         self.gen_forward_dynamics(use_thread_group)

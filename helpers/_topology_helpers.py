@@ -1,14 +1,23 @@
 import sympy as sp
 
-def gen_init_XImats(self, include_base_inertia = False):
+def gen_get_XI_size(self, include_base_inertia = False, include_homogenous_transforms = False):
+    n = self.robot.get_num_pos()
+    return 36*2*n + (36 if include_base_inertia else 0) + (16*n if include_homogenous_transforms else 0)
+
+def gen_get_Xhom_size(self):
+    n = self.robot.get_num_pos()
+    return 16*n
+
+def gen_init_XImats(self, include_base_inertia = False, include_homogenous_transforms = False):
     # add function description
     if include_base_inertia:
-        self.gen_add_func_doc("Initializes the Xmats and Imats in GPU memory", \
-            ["Memory order is X[0...N], Ibase, I[0...N]"], \
-            [],"A pointer to the XI memory in the GPU")
+        desc = "Memory order is X[0...N], Ibase, I[0...N]"
     else:
-        self.gen_add_func_doc("Initializes the Xmats and Imats in GPU memory", \
-            ["Memory order is X[0...N], I[0...N]"], \
+        desc = "Memory order is X[0...N], I[0...N]"
+    if include_homogenous_transforms:
+        desc += ", Xhom[0...N]"
+    self.gen_add_func_doc("Initializes the Xmats and Imats in GPU memory", \
+            [desc], \
             [],"A pointer to the XI memory in the GPU")
     # add the function start boilerplate
     self.gen_add_code_line("template <typename T>")
@@ -16,7 +25,7 @@ def gen_init_XImats(self, include_base_inertia = False):
     self.gen_add_code_line("T* init_XImats() {", True)
     # allocate CPU memory
     n = self.robot.get_num_pos()
-    XI_size = 36*2*n + (36 if include_base_inertia else 0)
+    XI_size = self.gen_get_XI_size(include_base_inertia,include_homogenous_transforms)
     self.gen_add_code_line("T *h_XImats = (T *)malloc(" + str(XI_size) + "*sizeof(T));")
     # loop through Xmats and add all constant values from the sp matrix (initialize non-constant to 0)
     Xmats = self.robot.get_Xmats_ordered_by_id()
@@ -45,6 +54,20 @@ def gen_init_XImats(self, include_base_inertia = False):
                 str_val = str(Imats[ind][row,col])
                 cpp_ind = str(self.gen_static_array_ind_3d(ind + mem_offset,col,row))
                 self.gen_add_code_line("h_XImats[" + cpp_ind + "] = static_cast<T>(" + str_val + ");")
+    mem_offset += len(Imats)
+    # add the X_hom if asked (follow the method from Xmats)
+    if (include_homogenous_transforms):
+        Xmats_hom = self.robot.get_Xmats_hom_ordered_by_id()
+        for ind in range(len(Xmats_hom)):
+            self.gen_add_code_line("// Xhom[" + str(ind) + "]")
+            for col in range(4):
+                for row in range(4):
+                    val = Xmats_hom[ind][row,col]
+                    if not val.is_constant(): # initialize to 0
+                        val = 0
+                    str_val = str(val)
+                    cpp_ind = 36*mem_offset + self.gen_static_array_ind_3d(ind,col,row,ind_stride=16,col_stride=4)
+                    self.gen_add_code_line("h_XImats[" + str(cpp_ind) + "] = static_cast<T>(" + str_val + ");")
     # allocate and transfer data to the GPU, free CPU memory and return the pointer to the memory
     self.gen_add_code_line("T *d_XImats; gpuErrchk(cudaMalloc((void**)&d_XImats," + str(XI_size) + "*sizeof(T)));")
     self.gen_add_code_line("gpuErrchk(cudaMemcpy(d_XImats,h_XImats," + str(XI_size) + "*sizeof(T),cudaMemcpyHostToDevice));")
@@ -77,18 +100,20 @@ def gen_load_update_XImats_helpers_function_call(self, use_thread_group = False,
         code_start = code_start.replace("(","(tgrp, ")
     self.gen_add_code_line(code_start + code_end)
 
-def gen_XImats_helpers_temp_shared_memory_code(self, temp_mem_size = None):
+def gen_XImats_helpers_temp_shared_memory_code(self, temp_mem_size = None, include_base_inertia = False, include_homogenous_transforms = False):
     n = self.robot.get_num_pos()
+    XI_size = self.gen_get_XI_size(include_base_inertia,include_homogenous_transforms)
     if not self.robot.is_serial_chain() or not self.robot.are_Ss_identical(list(range(n))):
         self.gen_add_code_line("__shared__ int s_topology_helpers[" + str(self.gen_topology_helpers_size()) + "];")
     if temp_mem_size is None: # use dynamic shared mem
-        self.gen_add_code_line("extern __shared__ T s_XITemp[]; T *s_XImats = s_XITemp; T *s_temp = &s_XITemp[" + str(72*n) + "];")
+        self.gen_add_code_line("extern __shared__ T s_XITemp[]; T *s_XImats = s_XITemp; T *s_temp = &s_XITemp[" + str(XI_size) + "];")
     else: # use specified static shared mem
-        self.gen_add_code_line("__shared__ T s_XImats[" + str(72*n) + "];")
+        self.gen_add_code_line("__shared__ T s_XImats[" + str(XI_size) + "];")
         self.gen_add_code_line("__shared__ T s_temp[" + str(temp_mem_size) + "];")
 
-def gen_load_update_XImats_helpers(self, use_thread_group = False):
+def gen_load_update_XImats_helpers(self, use_thread_group = False, include_base_inertia = False, include_homogenous_transforms = False):
     n = self.robot.get_num_pos()
+    XI_size = self.gen_get_XI_size(include_base_inertia,include_homogenous_transforms)
     # add function description
     func_def_start = "void load_update_XImats_helpers("
     func_def_middle = "T *s_XImats, const T *s_q, "
@@ -112,6 +137,7 @@ def gen_load_update_XImats_helpers(self, use_thread_group = False):
     self.gen_add_code_line(func_def, True)
     # test to see if we need to compute any trig functions
     Xmats = self.robot.get_Xmats_ordered_by_id()
+    Xmats_hom = self.robot.get_Xmats_hom_ordered_by_id()
     use_trig = False
     for mat in Xmats:
         if len(mat.atoms(sp.sin, sp.cos)) > 0:
@@ -119,7 +145,7 @@ def gen_load_update_XImats_helpers(self, use_thread_group = False):
             break
     # if we need trig then compute sin and cos while loading in XI from global to shared (if possible to do async)
     if use_trig and use_thread_group:
-        self.gen_add_code_line("cgrps::memcpy_async(tgrp,s_XImats,d_robotModel->d_XImats," + str(72*self.robot.get_num_pos()) + "*sizeof(T));")
+        self.gen_add_code_line("cgrps::memcpy_async(tgrp,s_XImats,d_robotModel->d_XImats," + str(XI_size) + "*sizeof(T));")
         if not self.robot.is_serial_chain() or not self.robot.are_Ss_identical(list(range(n))):
             self.gen_add_code_line("cgrps::memcpy_async(tgrp,s_topology_helpers,d_robotModel->d_topology_helpers," + str(self.gen_topology_helpers_size()) + "*sizeof(int));")
         self.gen_add_parallel_loop("k",str(self.robot.get_num_pos()),use_thread_group)
@@ -131,7 +157,7 @@ def gen_load_update_XImats_helpers(self, use_thread_group = False):
         self.gen_add_sync(use_thread_group)
     # else do them in parallel but sequentially
     elif use_trig:
-        self.gen_add_parallel_loop("ind",str(72*self.robot.get_num_pos()),use_thread_group)
+        self.gen_add_parallel_loop("ind",str(XI_size),use_thread_group)
         self.gen_add_code_line("s_XImats[ind] = d_robotModel->d_XImats[ind];")
         self.gen_add_end_control_flow()
         if not self.robot.is_serial_chain() or not self.robot.are_Ss_identical(list(range(n))):
@@ -146,7 +172,7 @@ def gen_load_update_XImats_helpers(self, use_thread_group = False):
         self.gen_add_sync(use_thread_group)
     # else just load in XI from global to shared efficiently
     else:
-        self.gen_add_code_line("cgrps::memcpy_async(tgrp,s_XImats,d_robotModel->d_XImats," + str(72*self.robot.get_num_pos()) + ");")
+        self.gen_add_code_line("cgrps::memcpy_async(tgrp,s_XImats,d_robotModel->d_XImats," + str(XI_size) + ");")
         if not self.robot.is_serial_chain() or not self.robot.are_Ss_identical(list(range(n))):
             self.gen_add_code_line("cgrps::memcpy_async(tgrp,s_topology_helpers,d_robotModel->d_topology_helpers," + str(self.gen_topology_helpers_size()) + "*sizeof(int));")
         self.gen_add_code_line("cgrps::wait(tgrp);")
@@ -168,6 +194,23 @@ def gen_load_update_XImats_helpers(self, use_thread_group = False):
                     # then output the code
                     cpp_ind = str(self.gen_static_array_ind_3d(ind,col,row))
                     self.gen_add_code_line("s_XImats[" + cpp_ind + "] = static_cast<T>(" + str_val + ");")
+        # also replace in homogenous ones
+        if (include_homogenous_transforms):
+            self.gen_add_code_line("// X_hom[" + str(ind) + "]")
+            for col in range(4): # TL and BR are identical so only update TL and BL serially
+                for row in range(4):
+                    val = Xmats_hom[ind][row,col]
+                    if not val.is_constant():
+                        # parse the symbolic value into the appropriate array access
+                        str_val = str(val)
+                        # first check for sin/cos (revolute)
+                        str_val = str_val.replace("sin(theta)","s_temp[" + str(ind) + "]")
+                        str_val = str_val.replace("cos(theta)","s_temp[" + str(ind + n) + "]")
+                        # then just the variable (prismatic)
+                        str_val = str_val.replace("theta","s_q[" + str(ind) + "]")
+                        # then output the code
+                        cpp_ind = str(self.gen_static_array_ind_3d(ind,col,row,ind_stride=16,col_stride=4))
+                        self.gen_add_code_line("s_XImats[" + cpp_ind + "] = static_cast<T>(" + str_val + ");")
     # end the serial section
     self.gen_add_end_control_flow()
     self.gen_add_sync(use_thread_group)
@@ -176,6 +219,113 @@ def gen_load_update_XImats_helpers(self, use_thread_group = False):
     self.gen_add_code_line("int k = kcr / 9; int cr = kcr % 9; int c = cr / 3; int r = cr % 3;")
     self.gen_add_code_line("int srcInd = k*36 + c*6 + r; int dstInd = srcInd + 21; // 3 more rows and cols")
     self.gen_add_code_line("s_XImats[dstInd] = s_XImats[srcInd];")
+    self.gen_add_end_control_flow()
+    self.gen_add_sync(use_thread_group)
+    # add the function end
+    self.gen_add_end_function()
+
+def gen_load_update_XmatsHom_helpers_function_call(self, use_thread_group = False, updated_var_names = None):
+    var_names = dict( \
+        s_XmatsHom_name = "s_XmatsHom", \
+        d_robotModel_name = "d_robotModel", \
+        s_q_name = "s_q", \
+        s_temp_name = "s_temp", \
+        s_topology_helpers_name = "s_topology_helpers", \
+    )
+    if updated_var_names is not None:
+        for key,value in updated_var_names.items():
+            var_names[key] = value
+    code_start = "load_update_XmatsHom_helpers<T>(" + var_names["s_XmatsHom_name"] + ", " + var_names["s_q_name"] + ", "
+    code_end = var_names["d_robotModel_name"] + ", " + var_names["s_temp_name"] + ");"
+    n = self.robot.get_num_pos()
+    if not self.robot.is_serial_chain() or not self.robot.are_Ss_identical(list(range(n))):
+        code_start += var_names["s_topology_helpers_name"] + ", "
+    if use_thread_group:
+        code_start = code_start.replace("(","(tgrp, ")
+    self.gen_add_code_line(code_start + code_end)
+
+def gen_XmatsHom_helpers_temp_shared_memory_code(self, temp_mem_size = None, include_base_inertia = False):
+    n = self.robot.get_num_pos()
+    Xhom_size = 16*n
+    if not self.robot.is_serial_chain() or not self.robot.are_Ss_identical(list(range(n))):
+        self.gen_add_code_line("__shared__ int s_topology_helpers[" + str(self.gen_topology_helpers_size()) + "];")
+    if temp_mem_size is None: # use dynamic shared mem
+        self.gen_add_code_line("extern __shared__ T s_XHomTemp[]; T *s_XmatsHom = s_XHomTemp; T *s_temp = &s_XHomTemp[" + str(Xhom_size) + "];")
+    else: # use specified static shared mem
+        self.gen_add_code_line("__shared__ T s_XmatsHom[" + str(XI_size) + "];")
+        self.gen_add_code_line("__shared__ T s_temp[" + str(temp_mem_size) + "];")
+
+def gen_load_update_XmatsHom_helpers(self, use_thread_group = False, include_base_inertia = False):
+    n = self.robot.get_num_pos()
+    Xhom_size = 16*n
+    # add function description
+    func_def_start = "void load_update_XmatsHom_helpers("
+    func_def_middle = "T *s_XmatsHom, const T *s_q, "
+    func_def_end = "const robotModel<T> *d_robotModel, T *s_temp) {"
+    func_params = ["s_XmatsHom is the (shared) memory destination location for the XmatsHom",\
+        "s_q is the (shared) memory location of the current configuration",\
+        "d_robotModel is the pointer to the initialized model specific helpers (XImats, mxfuncs, topology_helpers, etc.)", \
+        "s_temp is temporary (shared) memory used to compute sin and cos if needed of size: " + \
+                str(self.gen_load_update_XImats_helpers_temp_mem_size())]
+    if use_thread_group:
+        func_params.insert(0,"tgrp is the handle to the thread_group running this function")
+        func_def_start += "cgrps::thread_group tgrp, "
+    if not self.robot.is_serial_chain() or not self.robot.are_Ss_identical(list(range(n))):
+        func_def_middle += "int *s_topology_helpers, "
+        func_params.insert(-2,"s_topology_helpers is the (shared) memory destination location for the topology_helpers")
+    func_def = func_def_start + func_def_middle + func_def_end
+    # then genearte the code
+    self.gen_add_func_doc("Updates the XmatsHom in (shared) GPU memory acording to the configuration",[],func_params,None)
+    self.gen_add_code_line("template <typename T>")
+    self.gen_add_code_line("__device__")
+    self.gen_add_code_line(func_def, True)
+    # test to see if we need to compute any trig functions
+    Xmats_hom = self.robot.get_Xmats_hom_ordered_by_id()
+    use_trig = False
+    for mat in Xmats_hom:
+        if len(mat.atoms(sp.sin, sp.cos)) > 0:
+            use_trig = True
+            break
+    # if we need trig then compute sin and cos while loading in XI from global to shared (if possible to do async)
+    if use_trig:
+        self.gen_add_parallel_loop("ind",str(Xhom_size),use_thread_group)
+        self.gen_add_code_line("s_XmatsHom[ind] = d_robotModel->d_XImats[ind+" + str(self.gen_get_XI_size(include_base_inertia)) + "];")
+        self.gen_add_end_control_flow()
+        if not self.robot.is_serial_chain() or not self.robot.are_Ss_identical(list(range(n))):
+            self.gen_add_parallel_loop("ind",str(self.gen_topology_helpers_size()),use_thread_group)
+            self.gen_add_code_line("s_topology_helpers[ind] = d_robotModel->d_topology_helpers[ind];")
+            self.gen_add_end_control_flow()
+        self.gen_add_parallel_loop("k",str(self.robot.get_num_pos()),use_thread_group)
+        # self.gen_add_code_line("sincosf(s_q[k],&s_temp[k],&s_temp[k+" + str(self.robot.get_num_pos()) + "]);")
+        self.gen_add_code_line("s_temp[k] = static_cast<T>(sin(s_q[k]));")
+        self.gen_add_code_line("s_temp[k+" + str(self.robot.get_num_pos()) + "] = static_cast<T>(cos(s_q[k]));")
+        self.gen_add_end_control_flow()
+        self.gen_add_sync(use_thread_group)
+    # else just load in XI from global to shared efficiently
+    else:
+        self.gen_add_code_line("cgrps::memcpy_async(tgrp,s_XmatsHom,d_robotModel->d_XImats[ind+" + str(self.gen_get_XI_size(include_base_inertia)) + "]," + str(Xhom_size) + ");")
+        if not self.robot.is_serial_chain() or not self.robot.are_Ss_identical(list(range(n))):
+            self.gen_add_code_line("cgrps::memcpy_async(tgrp,s_topology_helpers,d_robotModel->d_topology_helpers," + str(self.gen_topology_helpers_size()) + "*sizeof(int));")
+        self.gen_add_code_line("cgrps::wait(tgrp);")
+    # loop through Xmats and update all non-constant values serially
+    self.gen_add_serial_ops(use_thread_group)
+    for ind in range(n):
+        self.gen_add_code_line("// X_hom[" + str(ind) + "]")
+        for col in range(4): # TL and BR are identical so only update TL and BL serially
+            for row in range(4):
+                val = Xmats_hom[ind][row,col]
+                if not val.is_constant():
+                    # parse the symbolic value into the appropriate array access
+                    str_val = str(val)
+                    # first check for sin/cos (revolute)
+                    str_val = str_val.replace("sin(theta)","s_temp[" + str(ind) + "]")
+                    str_val = str_val.replace("cos(theta)","s_temp[" + str(ind + n) + "]")
+                    # then just the variable (prismatic)
+                    str_val = str_val.replace("theta","s_q[" + str(ind) + "]")
+                    # then output the code
+                    cpp_ind = str(self.gen_static_array_ind_3d(ind,col,row,ind_stride=16,col_stride=4))
+                    self.gen_add_code_line("s_XmatsHom[" + cpp_ind + "] = static_cast<T>(" + str_val + ");")
+    # end the serial section
     self.gen_add_end_control_flow()
     self.gen_add_sync(use_thread_group)
     # add the function end
@@ -345,7 +495,7 @@ def gen_insert_helpers_function_call(self, updated_var_names = None):
         func_call += var_names["s_topology_helpers_name"] + ", "
     return func_call
 
-def gen_insert_helpers_func_def_params(self, func_def, func_params, param_insert_position = -1, updated_var_names = None):
+def gen_insert_helpers_func_def_params(self, func_def, func_params, param_insert_position = -1, updated_var_names = None, NO_XI_FLAG = False):
     n = self.robot.get_num_pos()
     var_names = dict( \
         s_XImats_name = "s_XImats", \
@@ -355,8 +505,9 @@ def gen_insert_helpers_func_def_params(self, func_def, func_params, param_insert
         for key,value in updated_var_names.items():
             var_names[key] = value
     n = self.robot.get_num_pos()
-    func_def += "T *" + var_names["s_XImats_name"] + ", "
-    func_params.insert(param_insert_position,"s_XImats is the (shared) memory holding the updated XI matricies for the given s_q")
+    if not NO_XI_FLAG:
+        func_def += "T *" + var_names["s_XImats_name"] + ", "
+        func_params.insert(param_insert_position,"s_XImats is the (shared) memory holding the updated XI matricies for the given s_q")
     if not self.robot.is_serial_chain() or not self.robot.are_Ss_identical(list(range(n))):
         func_def += "int *" + var_names["s_topology_helpers_name"] + ", "
         func_params.insert(param_insert_position,"s_topology_helpers is the (shared) memory destination location for the topology_helpers")
