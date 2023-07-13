@@ -27,7 +27,7 @@ def gen_vcross(self):
 def gen_aba_inner(self, use_thread_group = False): 
     n = self.robot.get_num_pos()
     n_bfs_levels = self.robot.get_max_bfs_level() + 1 # starts at 0
-	#construct the boilerplate and function definition
+	# construct the boilerplate and function definition
     func_params = ["s_qdd is the vector of joint accelerations", \
                 "s_va is a pointer to shared memory of size 2*6*NUM_JOINTS = " + str(12*n), \
                 "s_q is the vector of joint positions", \
@@ -39,7 +39,6 @@ def gen_aba_inner(self, use_thread_group = False):
     func_def_start = "void aba_inner("
     func_def_middle = "T *s_qdd, T *s_va, const T *s_q, const T *s_qd, const T *s_tau, "
     func_def_end = "T *s_temp, const T gravity) {"
-    #what goes in func_notes
     func_notes = ["Assumes the XI matricies have already been updated for the given q"]
     if use_thread_group:
         func_def_start = func_def_start.replace("(", "(cgrps::thread_group tgrp, ")
@@ -142,8 +141,7 @@ def gen_aba_inner(self, use_thread_group = False):
                 self.gen_add_end_control_flow()
                 self.gen_add_sync(use_thread_group)
 
-    #if self.robot.get_parent_id(ind):
-    #    c[:,ind] = self.mxS(S,v[:,ind],qd[ind])
+    # calculate c
     self.gen_add_code_line("// c[k] = mxS(v[k])*qd[k]")
     self.gen_add_parallel_loop("ind", str(n), use_thread_group)
     self.gen_add_code_line("int jid = ind;")
@@ -151,6 +149,7 @@ def gen_aba_inner(self, use_thread_group = False):
     self.gen_add_code_line("mx2_scaled<T>(&s_temp[72 * " + str(n) + "+jid6], &s_va[jid6], s_qd[jid]);")
     self.gen_add_end_control_flow()
     
+    # add debug if requested
     if self.DEBUG_MODE:
         self.gen_add_sync(use_thread_group)
         self.gen_add_serial_ops(use_thread_group)
@@ -204,7 +203,7 @@ def gen_aba_inner(self, use_thread_group = False):
     self.gen_add_code_line("//")
     self.gen_add_code_line("// Backward Pass")
     self.gen_add_code_line("//")
-    for bfs_level in range(n_bfs_levels - 1, -1, -1): # don't consider level 0 as parent is root
+    for bfs_level in range(n_bfs_levels - 1, -1, -1): 
         inds = self.robot.get_ids_by_bfs_level(bfs_level)
         joint_names = [self.robot.get_joint_by_id(ind).get_name() for ind in inds]
         link_names = [self.robot.get_link_by_id(ind).get_name() for ind in inds]
@@ -229,7 +228,7 @@ def gen_aba_inner(self, use_thread_group = False):
         self.gen_add_end_control_flow()
         self.gen_add_sync(use_thread_group)
 
-        # caclulate d (S*U) and u (tau - S*pA)
+        # caclulate d which is S*U and u which is tau - S*pA
         self.gen_add_code_line("// d[k] = S[k]*U[k], u[k] = tau[k] - S[k].T*pA[k]")
         self.gen_add_parallel_loop("ind", str(len(inds)), use_thread_group)
         if len(inds) > 1:
@@ -335,6 +334,7 @@ def gen_aba_inner(self, use_thread_group = False):
             self.gen_add_end_control_flow()
             self.gen_add_sync(use_thread_group)
 
+    # add debug if requested
     if self.DEBUG_MODE:
         self.gen_add_sync(use_thread_group)
         self.gen_add_serial_ops(use_thread_group)
@@ -432,6 +432,7 @@ def gen_aba_inner(self, use_thread_group = False):
         self.gen_add_end_control_flow()
         self.gen_add_sync(use_thread_group)
     
+    # add debug if requested
     if self.DEBUG_MODE:
         self.gen_add_sync(use_thread_group)
         self.gen_add_serial_ops(use_thread_group)
@@ -546,11 +547,10 @@ def gen_aba_kernel(self, use_thread_group = False, single_call_timing = False):
         self.gen_aba_inner_function_call(use_thread_group)
         self.gen_add_sync(use_thread_group)
         # save to global
-        # this line i'm confused on
         self.gen_kernel_save_result("qdd","1",str(n),use_thread_group)
         self.gen_add_end_control_flow()
     else:
-        #repurpose NUM_TIMESTEPS for number of timing reps
+        # repurpose NUM_TIMESTEPS for number of timing reps
         self.gen_kernel_load_inputs_single_timing("q_qd_tau",str(3*n),use_thread_group)
         # then compute in loop for timing
         self.gen_add_code_line("// compute with NUM_TIMESTEPS as NUM_REPS for timing")
@@ -585,7 +585,6 @@ def gen_aba_host(self, mode = 0):
     # then generate the code
     self.gen_add_func_doc("Compute the ABA (Articulated Body Algorithm)",\
                           func_notes,func_params,None)
-    #self.gen_add_code_line("template <typename T, bool USE_QDD_FLAG = false, bool USE_COMPRESSED_MEM = false>")
     self.gen_add_code_line("template <typename T>")
     self.gen_add_code_line("__host__")
     self.gen_add_code_line(func_def_start)
