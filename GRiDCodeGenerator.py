@@ -28,7 +28,7 @@ class GRiDCodeGenerator:
                             gen_forward_dynamics_gradient_inner_temp_mem_size, gen_forward_dynamics_gradient_kernel_max_temp_mem_size, \
                             gen_forward_dynamics_gradient_inner_python, gen_forward_dynamics_gradient_device, gen_forward_dynamics_gradient_kernel, \
                             gen_forward_dynamics_gradient_host, gen_forward_dynamics_gradient, gen_aba, gen_aba_inner, gen_aba_host, \
-                            gen_aba_inner_function_call, gen_aba_kernel, gen_aba_device, gen_aba_inner_temp_mem_size, \
+                            gen_aba_inner_function_call, gen_aba_kernel, gen_aba_device, gen_aba_inner_temp_mem_size, gen_vcross, \
                             gen_crba, gen_crba_inner_temp_mem_size, gen_crba_inner_function_call, gen_crba_inner, gen_crba_device_temp_mem_size, \
                             gen_crba_device, gen_crba_kernel, gen_crba_host
 
@@ -77,10 +77,12 @@ class GRiDCodeGenerator:
         suggested_threads = 32 * int(np.ceil(max_threads_in_comp_loop/32.0))
         self.gen_add_code_lines(["const int NUM_JOINTS = " + str(self.robot.get_num_pos()) + ";", \
                                  "const int ID_DYNAMIC_SHARED_MEM_COUNT = " + str(self.gen_inverse_dynamics_inner_temp_mem_size() + XI_size) + ";", \
+                                 "const int CRBA_SHARED_MEM_COUNT = " + str(self.gen_crba_inner_temp_mem_size() + XI_size) + ";", \
                                  "const int MINV_DYNAMIC_SHARED_MEM_COUNT = " + str(self.gen_direct_minv_inner_temp_mem_size() + XI_size) + ";", \
                                  "const int FD_DYNAMIC_SHARED_MEM_COUNT = " + str(self.gen_forward_dynamics_inner_temp_mem_size() + XI_size) + ";", \
                                  "const int ID_DU_DYNAMIC_SHARED_MEM_COUNT = " + str(self.gen_inverse_dynamics_gradient_inner_temp_mem_size() + XI_size) + ";", \
                                  "const int FD_DU_DYNAMIC_SHARED_MEM_COUNT = " + str(self.gen_forward_dynamics_gradient_inner_temp_mem_size() + XI_size) + ";", \
+                                 "const int ABA_DYNAMIC_SHARED_MEM_COUNT = " + str(self.gen_aba_inner_temp_mem_size() + XI_size) + ";", \
                                  "const int ID_DU_MAX_SHARED_MEM_COUNT = " + str(int(self.gen_inverse_dynamics_gradient_kernel_max_temp_mem_size()) + XI_size) + ";", \
                                  "const int FD_DU_MAX_SHARED_MEM_COUNT = " + str(int(self.gen_forward_dynamics_gradient_kernel_max_temp_mem_size()) + XI_size) + ";", \
                                  "const int SUGGESTED_THREADS = " + str(min(suggested_threads, 512)) + ";"]) # max of 512 to avoid exceeding available registers
@@ -176,6 +178,8 @@ class GRiDCodeGenerator:
                                  "auto fd_kern2 = static_cast<void (*)(T *, const T *, const int, const robotModel<T> *, const T, const int)>(&forward_dynamics_gradient_kernel<T>);", \
                                  "auto fd_kern_timing1 = static_cast<void (*)(T *, const T *, const int, const T *, const T *, const robotModel<T> *, const T, const int)>(&forward_dynamics_gradient_kernel_single_timing<T>);", \
                                  "auto fd_kern_timing2 = static_cast<void (*)(T *, const T *, const int, const robotModel<T> *, const T, const int)>(&forward_dynamics_gradient_kernel_single_timing<T>);", \
+                                 #"auto aba_kern = static_cast<void (*)(T *, const T *,const int, const robotModel<T>, *, const T, const int)>(&aba_kernel<T>);", \
+                                 #"auto aba_kern_timing = static_cast<void (*)(T *, const T *,const int, const robotModel<T>, *, const T, const int)>(&aba_kernel_single_timing<T>);", \
                                  "cudaFuncSetAttribute(id_kern1,cudaFuncAttributeMaxDynamicSharedMemorySize, ID_DU_MAX_SHARED_MEM_COUNT*sizeof(T));", \
                                  "cudaFuncSetAttribute(id_kern2,cudaFuncAttributeMaxDynamicSharedMemorySize, ID_DU_MAX_SHARED_MEM_COUNT*sizeof(T));", \
                                  "cudaFuncSetAttribute(id_kern_timing1,cudaFuncAttributeMaxDynamicSharedMemorySize, ID_DU_MAX_SHARED_MEM_COUNT*sizeof(T));", \
@@ -184,6 +188,8 @@ class GRiDCodeGenerator:
                                  "cudaFuncSetAttribute(fd_kern2,cudaFuncAttributeMaxDynamicSharedMemorySize, FD_DU_MAX_SHARED_MEM_COUNT*sizeof(T));", \
                                  "cudaFuncSetAttribute(fd_kern_timing1,cudaFuncAttributeMaxDynamicSharedMemorySize, FD_DU_MAX_SHARED_MEM_COUNT*sizeof(T));", \
                                  "cudaFuncSetAttribute(fd_kern_timing2,cudaFuncAttributeMaxDynamicSharedMemorySize, FD_DU_MAX_SHARED_MEM_COUNT*sizeof(T));", \
+                                 #"cudaFuncSetAttribute(aba_kern, cudaFuncAttributeMaxDynamicSharedMemorySize, ABA_DYNAMIC_SHARED_MEM_COUNT*sizeof(T));", \
+                                 #"cudaFuncSetAttribute(aba_kern_timing, cudaFuncAttributeMaxDynamicSharedMemorySize, ABA_DYNAMIC_SHARED_MEM_COUNT*sizeof(T));", \
                                  "gpuErrchk(cudaDeviceSynchronize());", \
                                  "// allocate streams", \
                                  "cudaStream_t *streams = (cudaStream_t *)malloc(" + str(MAX_STREAMS) + "*sizeof(cudaStream_t));", \
