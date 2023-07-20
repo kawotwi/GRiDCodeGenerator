@@ -329,7 +329,7 @@ def gen_aba_inner(self, use_thread_group = False):
                 jid = str(inds[0])
                 self.gen_add_code_line("int jid = " + jid + ";")
             self.gen_add_code_line("int jid6 = 6 * jid;")
-            self.gen_add_code_line("T prodtemp = 0;")
+            self.gen_add_code_line("T prodtemp = static_cast<T>(0);")
             self.gen_add_code_line("prodtemp =  dot_prod<T,6,6,1>(&s_temp[98 * " + str(n) + " + 6 * jid6 + row], &s_XImats[6*jid6+6*col]);")
             self.gen_add_code_line("atomicAdd(&s_temp[36 * " + parent_ind_cpp +" + row + 6*col], prodtemp);")
             self.gen_add_end_control_flow()
