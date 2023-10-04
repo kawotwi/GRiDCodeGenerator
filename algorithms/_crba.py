@@ -286,10 +286,10 @@ def gen_crba_inner(self, use_thread_group = False):
     self.gen_add_sync(use_thread_group)
     
     self.gen_add_code_line("//")
-    self.gen_add_code_line("// Calculation of H[ind, ind] ")
+    self.gen_add_code_line("// Calculation of M[ind, ind] ")
     self.gen_add_code_line("//")
     """for ind in range(n-1, -1, -1): # in parallel
-        # Calculation of H[ind, ind]
+        # Calculation of M[ind, ind]
         _, S_ind_cpp = self.gen_topology_helpers_pointers_for_cpp(NO_GRAD_FLAG = True)
 
         self.gen_add_parallel_loop("ind",str(49),use_thread_group)
@@ -318,7 +318,7 @@ def gen_crba_inner(self, use_thread_group = False):
   
     
     """for ind in range(n-1, -1, -1): # in parallel
-        # Calculation of H[ind, j] and H[j, ind]
+        # Calculation of M[ind, j] and M[j, ind]
         _, S_ind_cpp = self.gen_topology_helpers_pointers_for_cpp(NO_GRAD_FLAG = True)
         
         self.gen_add_parallel_loop("ind",str(36),use_thread_group)
@@ -342,7 +342,7 @@ def gen_crba_inner(self, use_thread_group = False):
     self.gen_add_sync(use_thread_group)"""
 
     """for ind in range(n-1, -1, -1): # in parallel
-        # Calculation of H[ind, j] and H[j, ind]
+        # Calculation of M[ind, j] and M[j, ind]
         #_, S_ind_cpp = self.gen_topology_helpers_pointers_for_cpp(NO_GRAD_FLAG = True)
         
         self.gen_add_parallel_loop("jid",str(n),use_thread_group)
@@ -358,7 +358,7 @@ def gen_crba_inner(self, use_thread_group = False):
     self.gen_add_sync(use_thread_group)"""
 
     self.gen_add_code_line("//")
-    self.gen_add_code_line("// Calculation of parent_ind, fh, H[ind, parent] and H[parent, ind] ")
+    self.gen_add_code_line("// Calculation of parent_ind, fh, M[ind, parent] and M[parent, ind] ")
     self.gen_add_code_line("//")
 
     for bfs_level in range(n_bfs_levels-1,0,-1):
@@ -500,14 +500,14 @@ def gen_crba_device(self, use_thread_group = False):
 def gen_crba_kernel(self, use_thread_group = False, single_call_timing = False):
     n = self.robot.get_num_pos()
     # define function def and params
-    func_params = ["d_H is the pointer to the matrix of inertia", \
+    func_params = ["d_M is the pointer to the matrix of inertia", \
                     "d_q_qd is the vector of joint positions and velocities", \
                     "stride_q_qd is the stride between each q, qd", \
                     "d_robotModel is the pointer to the initialized model specific helpers on the GPU (XImats, topology_helpers, etc.)", \
                     "gravity is the gravity constant", \
                     "num_timesteps is the length of the trajectory points we need to compute over (or overloaded as test_iters for timing)"]
     func_notes = []
-    func_def_start = "void crba_kernel(T *d_H, const T *d_q_qd, const int stride_q_qd, "
+    func_def_start = "void crba_kernel(T *d_M, const T *d_q_qd, const int stride_q_qd, "
     func_def_end = "const robotModel<T> *d_robotModel, const T gravity, const int NUM_TIMESTEPS) {"
     func_def = func_def_start + func_def_end
     if single_call_timing:
@@ -538,7 +538,7 @@ def gen_crba_kernel(self, use_thread_group = False, single_call_timing = False):
         self.gen_crba_inner_function_call(use_thread_group)
         self.gen_add_sync(use_thread_group)
         # save to global
-        self.gen_kernel_save_result("H","1",str(n),use_thread_group)
+        self.gen_kernel_save_result("M","1",str(n),use_thread_group)
         self.gen_add_end_control_flow()
     else:
         # repurpose NUM_TIMESTEPS for number of timing reps
@@ -550,19 +550,19 @@ def gen_crba_kernel(self, use_thread_group = False, single_call_timing = False):
         self.gen_crba_inner_function_call(use_thread_group)
         self.gen_add_end_control_flow()
         # save to global
-        self.gen_kernel_save_result_single_timing("H",str(n),use_thread_group)
+        self.gen_kernel_save_result_single_timing("M",str(n),use_thread_group)
     self.gen_add_end_function()
     """n = self.robot.get_num_pos()
 
     # define function def and params
-    func_params = ["d_H is the matrix of output Inertia", \
+    func_params = ["d_M is the matrix of output Inertia", \
                    "d_q_dq is the vector of joint positions and velocities", \
                    "stride_q_qd is the stride between each q, qd", \
                    "d_robotModel is the pointer to the initialized model specific helpers on the GPU (XImats, topology_helpers, etc.)", \
                    "gravity is the gravity constant,", \
                    "num_timesteps is the length of the trajectory points we need to compute over (or overloaded as test_iters for timing)"]
     func_notes = []
-    func_def_start = "void crba_kernel(T *d_H, const T *d_q_qd, const int stride_q_qd, "
+    func_def_start = "void crba_kernel(T *d_M, const T *d_q_qd, const int stride_q_qd, "
     func_def_end = "const robotModel<T> *d_robotModel, const T gravity, const int NUM_TIMESTEPS) {"
     func_def = func_def_start + func_def_end
     if single_call_timing:
@@ -591,7 +591,7 @@ def gen_crba_kernel(self, use_thread_group = False, single_call_timing = False):
         self.gen_crba_inner_function_call(use_thread_group)
         self.gen_add_sync(use_thread_group)
         # save to global
-        self.gen_kernel_save_result("H",str(1),str(n),use_thread_group)
+        self.gen_kernel_save_result("M",str(1),str(n),use_thread_group)
         self.gen_add_end_control_flow()
     else:
         #repurpose NUM_TIMESTEPS for number of timing reps
@@ -603,7 +603,7 @@ def gen_crba_kernel(self, use_thread_group = False, single_call_timing = False):
         self.gen_crba_inner_function_call(use_thread_group)
         self.gen_add_end_control_flow()
         # save to global
-        self.gen_kernel_save_result_single_timing("H",str(n),use_thread_group)
+        self.gen_kernel_save_result_single_timing("M",str(n),use_thread_group)
     self.gen_add_end_function()"""
 
 def gen_crba_host(self, mode = 0):
@@ -637,7 +637,7 @@ def gen_crba_host(self, mode = 0):
     self.gen_add_code_line(func_def_start)
     self.gen_add_code_line(func_def_end, True)
 
-    func_call_start = "crba_kernel<T><<<block_dimms,thread_dimms,CRBA_SHARED_MEM_COUNT*sizeof(T)>>>(hd_data->d_H,hd_data->d_q_qd_u,stride_q_qd,"
+    func_call_start = "crba_kernel<T><<<block_dimms,thread_dimms,CRBA_SHARED_MEM_COUNT*sizeof(T)>>>(hd_data->d_M,hd_data->d_q_qd_u,stride_q_qd,"
     func_call_end = "d_robotModel,gravity,num_timesteps);"
     self.gen_add_code_line("int stride_q_qd = 3*NUM_JOINTS;")
     if single_call_timing:
@@ -660,7 +660,7 @@ def gen_crba_host(self, mode = 0):
     if not compute_only:
         # then transfer memory back
         self.gen_add_code_lines(["// finally transfer the result back", \
-                                "gpuErrchk(cudaMemcpy(hd_data->h_H,hd_data->d_qdd,NUM_JOINTS*" + \
+                                "gpuErrchk(cudaMemcpy(hd_data->h_M,hd_data->d_qdd,NUM_JOINTS*" + \
                                 ("num_timesteps*" if not single_call_timing else "") + "sizeof(T),cudaMemcpyDeviceToHost));",
                                 "gpuErrchk(cudaDeviceSynchronize());"])
     # finally report out timing if requested
@@ -695,7 +695,7 @@ def gen_crba_host(self, mode = 0):
     self.gen_add_code_line("__host__")
     self.gen_add_code_line(func_def_start)
     self.gen_add_code_line(func_def_end, True)
-    func_call_start = "crba_kernel<T><<<block_dimms,thread_dimms,CRBA_SHARED_MEM_COUNT*sizeof(T)>>>(hd_data->d_H,hd_data->d_q_qd,stride_q_qd,"
+    func_call_start = "crba_kernel<T><<<block_dimms,thread_dimms,CRBA_SHARED_MEM_COUNT*sizeof(T)>>>(hd_data->d_M,hd_data->d_q_qd,stride_q_qd,"
     func_call_end = "d_robotModel,gravity,num_timesteps);"
     if single_call_timing:
         func_call_start = func_call_start.replace("kernel<T>","kernel_single_timing<T>")
@@ -726,7 +726,7 @@ def gen_crba_host(self, mode = 0):
     if not compute_only:
         # then transfer memory back
         self.gen_add_code_lines(["// finally transfer the result back", \
-                                 "gpuErrchk(cudaMemcpy(hd_data->h_H,hd_data->d_H,NUM_JOINTS*" + \
+                                 "gpuErrchk(cudaMemcpy(hd_data->h_M,hd_data->d_M,NUM_JOINTS*" + \
                                     ("num_timesteps*" if not single_call_timing else "") + "sizeof(T),cudaMemcpyDeviceToHost));",
                                  "gpuErrchk(cudaDeviceSynchronize());"])
     # finally report out timing if requested
