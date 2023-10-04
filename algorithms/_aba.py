@@ -1,47 +1,3 @@
-def gen_vcross(self):
-    func_def = "void vcross(T *dest, T *v){"
-    self.gen_add_code_line("template <typename T>")
-    self.gen_add_code_line("__device__")
-    self.gen_add_code_line(func_def,True)
-    self.gen_add_code_line("dest[0] = static_cast<T>(0);")
-    self.gen_add_code_line("dest[1] = v[2];")
-    self.gen_add_code_line("dest[2] = -1*v[1];")
-    self.gen_add_code_line("dest[3] = static_cast<T>(0);")
-    self.gen_add_code_line("dest[4] = v[5];")
-    self.gen_add_code_line("dest[5] = -1*v[4];")
-    self.gen_add_code_line("dest[6] = -1*v[2];")
-    self.gen_add_code_line("dest[7] = static_cast<T>(0);")
-    self.gen_add_code_line("dest[8] = v[0];")
-    self.gen_add_code_line("dest[9] = -1*v[5];")
-    self.gen_add_code_line("dest[10] = static_cast<T>(0);")
-    self.gen_add_code_line("dest[11] = v[3];")
-    self.gen_add_code_line("dest[12] = v[1];")
-    self.gen_add_code_line("dest[13] = -1*v[0];")
-    self.gen_add_code_line("dest[14] = static_cast<T>(0);")
-    self.gen_add_code_line("dest[15] = v[4];")
-    self.gen_add_code_line("dest[16] = -1*v[3];")
-    self.gen_add_code_line("dest[17] = static_cast<T>(0);")
-    self.gen_add_code_line("dest[18] = static_cast<T>(0);")
-    self.gen_add_code_line("dest[19] = static_cast<T>(0);")
-    self.gen_add_code_line("dest[20] = static_cast<T>(0);")
-    self.gen_add_code_line("dest[21] = static_cast<T>(0);")
-    self.gen_add_code_line("dest[22] = v[2];")
-    self.gen_add_code_line("dest[23] = -1*v[1];")
-    self.gen_add_code_line("dest[24] = static_cast<T>(0);")
-    self.gen_add_code_line("dest[25] = static_cast<T>(0);")
-    self.gen_add_code_line("dest[26] = static_cast<T>(0);")
-    self.gen_add_code_line("dest[27] = -1*v[2];")
-    self.gen_add_code_line("dest[28] = static_cast<T>(0);")
-    self.gen_add_code_line("dest[29] = v[0];")
-    self.gen_add_code_line("dest[30] = static_cast<T>(0);")
-    self.gen_add_code_line("dest[31] = static_cast<T>(0);")
-    self.gen_add_code_line("dest[32] = static_cast<T>(0);")
-    self.gen_add_code_line("dest[33] = v[1];")
-    self.gen_add_code_line("dest[34] = -1*v[0];")
-    self.gen_add_code_line("dest[35] = static_cast<T>(0);")
-    self.gen_add_end_control_flow()
-
-
 def gen_aba_inner(self, use_thread_group = False): 
     n = self.robot.get_num_pos()
     n_bfs_levels = self.robot.get_max_bfs_level() + 1 # starts at 0
@@ -640,7 +596,6 @@ def gen_aba_host(self, mode = 0):
     self.gen_add_end_function()
 
 def gen_aba(self, use_thread_group = False):
-    self.gen_vcross()
     # first generate the inner helper
     self.gen_aba_inner(use_thread_group)
     # then generate the device wrapper
