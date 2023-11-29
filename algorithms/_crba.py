@@ -4,7 +4,7 @@ import copy
 
 def gen_crba_inner_temp_mem_size(self):
     n = self.robot.get_num_pos()
-    return 100*n
+    return 140*n
 
 def gen_crba_inner_function_call(self, use_thread_group = False, updated_var_names = None):
     """var_names = dict( \
@@ -279,7 +279,7 @@ def gen_crba_inner(self, use_thread_group = False):
         self.gen_add_code_line("int row = ind % 6; ")
 
         #fh_code = "if (row == " + S_ind_cpp + "){s_fh[ind] = s_XImats[36*(jid+7) + row + col*6];}"
-        fh_code = "s_fh[jid6 + row] = s_XImats[36*(jid+7) + " +  S_ind_cpp + "*6 + ind];"
+        fh_code = "s_fh[jid6 + row] = s_XImats[36*(jid+7 + " + str(n-7) + ") + " +  S_ind_cpp + "*6 + ind];"
         self.gen_add_code_line(fh_code)
 
         self.gen_add_end_control_flow()
@@ -394,7 +394,7 @@ def gen_crba_inner(self, use_thread_group = False):
 
 
            
-            self.gen_add_parallel_loop("parallel_ind",str(len(inds)),use_thread_group)
+            self.gen_add_parallel_loop("parallel_ind",str(len(inds)*6),use_thread_group)
 
             if len(inds) > 1:
                 select_var_vals = [("int", "jid", [str(jid) for jid in inds])]
@@ -409,7 +409,7 @@ def gen_crba_inner(self, use_thread_group = False):
             self.gen_add_end_control_flow()
             self.gen_add_sync(use_thread_group)
             
-            self.gen_add_parallel_loop("parallel_ind",str(6),use_thread_group)
+            self.gen_add_parallel_loop("parallel_ind",str(len(inds)*6),use_thread_group)
 
             if len(inds) > 1:
                 select_var_vals = [("int", "jid", [str(jid) for jid in inds])]
@@ -489,7 +489,7 @@ def gen_crba_device(self, use_thread_group = False):
     self.gen_add_code_line(func_def, True)
 
     # add the shared memory variables
-    shared_mem_size = self.gen_crba_inner_temp_mem_size() if not self.use_dynamic_shared_mem_flag else None 
+    shared_mem_size = self.gen_crba_device_temp_mem_size() if not self.use_dynamic_shared_mem_flag else None 
     self.gen_XImats_helpers_temp_shared_memory_code(shared_mem_size)
 
     # then load/update XI and run the algo
@@ -552,59 +552,6 @@ def gen_crba_kernel(self, use_thread_group = False, single_call_timing = False):
         # save to global
         self.gen_kernel_save_result_single_timing("M",str(n),use_thread_group)
     self.gen_add_end_function()
-    """n = self.robot.get_num_pos()
-
-    # define function def and params
-    func_params = ["d_M is the matrix of output Inertia", \
-                   "d_q_dq is the vector of joint positions and velocities", \
-                   "stride_q_qd is the stride between each q, qd", \
-                   "d_robotModel is the pointer to the initialized model specific helpers on the GPU (XImats, topology_helpers, etc.)", \
-                   "gravity is the gravity constant,", \
-                   "num_timesteps is the length of the trajectory points we need to compute over (or overloaded as test_iters for timing)"]
-    func_notes = []
-    func_def_start = "void crba_kernel(T *d_M, const T *d_q_qd, const int stride_q_qd, "
-    func_def_end = "const robotModel<T> *d_robotModel, const T gravity, const int NUM_TIMESTEPS) {"
-    func_def = func_def_start + func_def_end
-    if single_call_timing:
-        func_def = func_def.replace("kernel(", "kernel_single_timing(")
-    # then generate the code
-    self.gen_add_func_doc("Compute the CRBA (Composite Rigid Body Algorithm)",\
-                          func_notes,func_params,None)
-    self.gen_add_code_line("template <typename T>")
-    self.gen_add_code_line("__global__")
-    self.gen_add_code_line(func_def, True)
-    # add shared memory variables
-    shared_mem_vars = ["__shared__ T s_q_qd[2*" + str(n) + "]; T *s_q = s_q_qd; T *s_qd = &s_q_qd[" + str(n) + "];", \
-                       "__shared__ T s_M[" + str(n*n) + "];"]
-    self.gen_add_code_lines(shared_mem_vars)
-    shared_mem_size = self.gen_crba_inner_temp_mem_size() if not self.use_dynamic_shared_mem_flag else None
-    self.gen_XImats_helpers_temp_shared_memory_code(shared_mem_size)
-    if use_thread_group:
-        self.gen_add_code_line("cgrps::thread_group tgrp = TBD;")
-    if not single_call_timing:
-        # load to shared mem and loop over blocks to compute all requested comps
-        self.gen_add_parallel_loop("k","NUM_TIMESTEPS",use_thread_group,block_level = True)
-        self.gen_kernel_load_inputs("q_qd","stride_q_qd",str(2*n),use_thread_group)
-        # compute
-        self.gen_add_code_line("// compute")
-        self.gen_load_update_XImats_helpers_function_call(use_thread_group)
-        self.gen_crba_inner_function_call(use_thread_group)
-        self.gen_add_sync(use_thread_group)
-        # save to global
-        self.gen_kernel_save_result("M",str(1),str(n),use_thread_group)
-        self.gen_add_end_control_flow()
-    else:
-        #repurpose NUM_TIMESTEPS for number of timing reps
-        self.gen_kernel_load_inputs_single_timing("q_qd",str(2*n),use_thread_group)
-        # then compute in loop for timing
-        self.gen_add_code_line("// compute with NUM_TIMESTEPS as NUM_REPS for timing")
-        self.gen_add_code_line("for (int rep = 0; rep < NUM_TIMESTEPS; rep++){", True)
-        self.gen_load_update_XImats_helpers_function_call(use_thread_group)
-        self.gen_crba_inner_function_call(use_thread_group)
-        self.gen_add_end_control_flow()
-        # save to global
-        self.gen_kernel_save_result_single_timing("M",str(n),use_thread_group)
-    self.gen_add_end_function()"""
 
 def gen_crba_host(self, mode = 0):
 
