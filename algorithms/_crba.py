@@ -315,52 +315,6 @@ def gen_crba_inner(self, use_thread_group = False):
     self.gen_add_end_control_flow()
     self.gen_add_sync(use_thread_group)
 
-  
-    
-    """for ind in range(n-1, -1, -1): # in parallel
-        # Calculation of M[ind, j] and M[j, ind]
-        _, S_ind_cpp = self.gen_topology_helpers_pointers_for_cpp(NO_GRAD_FLAG = True)
-        
-        self.gen_add_parallel_loop("ind",str(36),use_thread_group)
-        
-        self.gen_add_code_line("int jid = " + str(ind) + " ; int jid6 = jid * 6;")
-        self.gen_add_code_line("int row = ind % 6; int col = (ind / 6) % 6;")
-
-        fh_code = "if (row == " + S_ind_cpp + "){s_fh[col] = s_XImats[36*(jid+7) + row + col*6];}"
-        self.gen_add_code_line(fh_code)
-       
-        #self.gen_add_parallel_loop("jid",str(n),use_thread_group)
-
-        #fh_code = "if (jid == " + S_ind_cpp + "){s_fh[jid] = s_XImats[36*(jid+7)];}"
-        #self.gen_add_code_line(fh_code)
-
-        #init_j = "s_j = " + str(ind) + " ;"
-        #self.gen_add_code_line(init_j)
-
-        self.gen_add_end_control_flow()
-
-    self.gen_add_sync(use_thread_group)"""
-
-    """for ind in range(n-1, -1, -1): # in parallel
-        # Calculation of M[ind, j] and M[j, ind]
-        #_, S_ind_cpp = self.gen_topology_helpers_pointers_for_cpp(NO_GRAD_FLAG = True)
-        
-        self.gen_add_parallel_loop("jid",str(n),use_thread_group)
-        
-        #self.gen_add_code_line("int jid = " + str(ind) + " ; int jid6 = jid * 6;")
-        #self.gen_add_code_line("int row = ind % 6; int col = (ind / 6) % 6;")
-
-        #h_code = "if (row == " + S_ind_cpp + "){s_M[jid + (jid)*7] = s_fh[row];}"
-        #self.gen_add_code_line(h_code)
-        self.gen_add_code_line("s_j[jid] = " + str(ind) + ";")
-
-        self.gen_add_end_control_flow()
-    self.gen_add_sync(use_thread_group)"""
-
-    self.gen_add_code_line("//")
-    self.gen_add_code_line("// Calculation of parent_ind, fh, M[ind, parent] and M[parent, ind] ")
-    self.gen_add_code_line("//")
-
     self.gen_add_code_line("//")
     self.gen_add_code_line("// Calculation of parent_ind, fh, M[ind, parent] and M[parent, ind] ")
     self.gen_add_code_line("//")
@@ -385,27 +339,37 @@ def gen_crba_inner(self, use_thread_group = False):
             jid = "jid"
         else:
             jid = str(inds[0])"""
-        
-        if len(inds) > 1:
-                self.gen_add_parallel_loop("parallel_ind",str(len(inds)*6),use_thread_group)
-                select_var_vals = [("int", "jid", [str(jid) for jid in inds])]
-                self.gen_add_multi_threaded_select("parallel_ind", "< ", [str(6*(i+1)) for i in range(len(inds))], select_var_vals)
-                self.gen_add_code_line("s_parent_inds[jid] = " + str(parent_ind_cpp) + ";")
-                #self.gen_add_code_line("s_inds[jid] = " + str(jid) + ";")
-                self.gen_add_end_control_flow()
-                self.gen_add_sync(use_thread_group)
-            
-            # self.gen_add_parallel_loop("parallel_ind",str(len(inds)*6),use_thread_group)
 
         if len(inds) > 1:
+           #     select_var_vals = [("int", "jid", [str(jid) for jid in inds])]
+           #     self.gen_add_multi_threaded_select("parallel_ind", "< ", [str(6*(i+1)) for i in range(len(inds))], select_var_vals)
+           #     jid = "jid"
+           # else:
             self.gen_add_parallel_loop("parallel_ind",str(len(inds)*6),use_thread_group)
             select_var_vals = [("int", "jid", [str(jid) for jid in inds])]
-            self.gen_add_multi_threaded_select("parallel_ind", "< ", [str(6*(i+1)) for i in range(len(inds))], select_var_vals)           
+            self.gen_add_multi_threaded_select("parallel_ind", "< ", [str(6*(i+1)) for i in range(len(inds))], select_var_vals)
+            self.gen_add_code_line("s_parent_inds[jid] = " + str(parent_ind_cpp) + ";")
+            #self.gen_add_code_line("s_inds[jid] = " + str(jid) + ";")
+            self.gen_add_end_control_flow()
+            self.gen_add_sync(use_thread_group)
+          
+           # self.gen_add_parallel_loop("parallel_ind",str(len(inds)*6),use_thread_group)
+
+
+        if len(inds) > 1:
+        #     select_var_vals = [("int", "jid", [str(jid) for jid in inds])]
+        #     self.gen_add_multi_threaded_select("parallel_ind", "< ", [str(6*(i+1)) for i in range(len(inds))], select_var_vals)
+        #     jid = "jid"
+        # else:
+            self.gen_add_parallel_loop("parallel_ind",str(len(inds)*6),use_thread_group)
+            select_var_vals = [("int", "jid", [str(jid) for jid in inds])]
+            self.gen_add_multi_threaded_select("parallel_ind", "< ", [str(6*(i+1)) for i in range(len(inds))], select_var_vals)         
             self.gen_add_code_line("int jid6 = jid * 6; int row = parallel_ind % 6;")
             self.gen_add_code_line("int curr_parent = s_parent_inds[jid];")
             self.gen_add_code_line("s_fh[jid6 + row] = dot_prod<T,6,1,1>(&s_XImats[36*(curr_parent+1) + 6*row], &s_fh[jid6]);")
             self.gen_add_end_control_flow()
             self.gen_add_sync(use_thread_group)
+
 
 
         for parent_level in range(bfs_level, 0, -1):
@@ -422,11 +386,11 @@ def gen_crba_inner(self, use_thread_group = False):
             # self.gen_add_parallel_loop("parallel_ind",str(len(inds)*6),use_thread_group)
 
             if len(inds) <= 1:
+                self.gen_add_parallel_loop("parallel_ind",str(len(inds)*6),use_thread_group)
             #     select_var_vals = [("int", "jid", [str(jid) for jid in inds])]
             #     self.gen_add_multi_threaded_select("parallel_ind", "< ", [str(6*(i+1)) for i in range(len(inds))], select_var_vals)
             #     jid = "jid"
             # else:
-                self.gen_add_parallel_loop("parallel_ind",str(len(inds)*6),use_thread_group)
                 jid = str(inds[0])
                 self.gen_add_code_line("int jid = " + str(jid) + ";")
                 self.gen_add_code_line("s_parent_inds[jid] = " + str(parent_ind_cpp_par) + ";")
@@ -437,16 +401,20 @@ def gen_crba_inner(self, use_thread_group = False):
             # self.gen_add_parallel_loop("parallel_ind",str(len(inds)*6),use_thread_group)
 
             if len(inds) <= 1:
-            #     select_var_vals = [("int", "jid", [str(jid) for jid in inds])]
-            #     self.gen_add_multi_threaded_select("parallel_ind", "< ", [str(6*(i+1)) for i in range(len(inds))], select_var_vals)
-            #     jid = "jid"
-            # else:
                 self.gen_add_parallel_loop("parallel_ind",str(len(inds)*6),use_thread_group)
+                # select_var_vals = [("int", "jid", [str(jid) for jid in inds])]
+                # self.gen_add_multi_threaded_select("parallel_ind", "< ", [str(6*(i+1)) for i in range(len(inds))], select_var_vals)
+                # jid = "jid"
+            # else:
                 jid = str(inds[0])
-                self.gen_add_code_line("int jid = " + str(jid) + ";")            
+                self.gen_add_code_line("int jid = " + str(jid) + ";")
+            
                 self.gen_add_code_line("int jid6 = jid * 6; int row = parallel_ind % 6;")
+                #self.gen_add_code_line("int row = parallel_ind % 6; int col = (parallel_ind / 7) % 7;")
+                #self.gen_add_code_line("int curr_joint = s_inds[jid];")
                 self.gen_add_code_line("int curr_parent = s_parent_inds[jid];")
                 self.gen_add_code_line("s_fh[jid6 + row] = dot_prod<T,6,1,1>(&s_XImats[36*(curr_parent+1) + 6*row], &s_fh[jid6]);")
+
                 self.gen_add_end_control_flow()
                 self.gen_add_sync(use_thread_group)
 
