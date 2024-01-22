@@ -90,12 +90,6 @@ def gen_crba_inner(self, use_thread_group = False):
     #j_offset = fh_offset + 36*n #bc fh is matrix 
     parent_offset = fh_offset + 6*n #bc j is 1 int 
     jid_offset = parent_offset + n
-    #inds_offset = parent_offset + 36*n
-    #ind_offset = temparr_offset + 6*6*4 #bc temparr is 6x6 matrix of floats
-    #x_offset = temparr_offset + 6*6*4 #bc s_X is 7 6x6 matrix of floats
-    #ic_offset = x_offset + 6*6*4 #bc s_X is 7 6x6 matrix of floats
-    #parent_offset = ind_offset + 1*2 #bc parent_ind_cpp is 1 int 
-    #sval_offset = parent_offset + 1*2 #bc S_ind_cpp is 1 int 
     self.gen_add_code_line("T *alpha = &s_temp[" + str(alpha_offset) + "];")
     self.gen_add_code_line("T *beta = &s_temp[" + str(beta_offset) + "];")
     #self.gen_add_code_line("T *transpose = &s_temp[" + str(t_offset) + "];")
@@ -200,9 +194,6 @@ def gen_crba_inner(self, use_thread_group = False):
                 self.gen_add_end_control_flow()
                 self.gen_add_sync(use_thread_group) 
 
-
-
-
         else:
             jid = str(inds[0])
             self.gen_add_code_line("int jid = " + str(jid) + " ;")
@@ -288,21 +279,6 @@ def gen_crba_inner(self, use_thread_group = False):
     self.gen_add_code_line("//")
     self.gen_add_code_line("// Calculation of M[ind, ind] ")
     self.gen_add_code_line("//")
-    """for ind in range(n-1, -1, -1): # in parallel
-        # Calculation of M[ind, ind]
-        _, S_ind_cpp = self.gen_topology_helpers_pointers_for_cpp(NO_GRAD_FLAG = True)
-
-        self.gen_add_parallel_loop("ind",str(49),use_thread_group)
-
-        self.gen_add_code_line("int jid = " + str(ind) + " ; int jid7 = jid * 7;")
-        self.gen_add_code_line("int row = ind % 6; int col = (ind / 7) % 7;")
-
-        #h_code = "if (col == " + S_ind_cpp + "){s_M[jid + jid7] = s_fh[jid7 + col*6];}"
-        h_code = "s_M[jid + jid7] = s_fh[jid7 + " + S_ind_cpp + "*6];"
-        self.gen_add_code_line(h_code)
-        #self.gen_add_code_line("s_parent_inds[jid] = " + str(par_ind_cpp) + ";")
-
-        self.gen_add_end_control_flow()"""
     
     self.gen_add_parallel_loop("jid",str(n),use_thread_group)
     self.gen_add_code_line("int jidn = jid * " + str(n) + "; int jid6 = jid * 6;")
@@ -323,8 +299,6 @@ def gen_crba_inner(self, use_thread_group = False):
         inds = self.robot.get_ids_by_bfs_level(bfs_level)
         parent_ind_cpp, S_ind_cpp = self.gen_topology_helpers_pointers_for_cpp(inds, NO_GRAD_FLAG = True)
 
-        #self.gen_add_code_line("s_inds = ", inds)
-        #self.gen_add_code_line("s_parent_inds = ", inds)
         
         joint_names = [self.robot.get_joint_by_id(indj).get_name() for indj in inds]
         link_names = [self.robot.get_link_by_id(indl).get_name() for indl in inds]
@@ -381,10 +355,6 @@ def gen_crba_inner(self, use_thread_group = False):
             self.gen_add_code_line("//     joints are: " + ", ".join(joint_names))
             self.gen_add_code_line("//     links are: " + ", ".join(link_names))
 
-
-           
-            # self.gen_add_parallel_loop("parallel_ind",str(len(inds)*6),use_thread_group)
-
             if len(inds) <= 1:
                 self.gen_add_parallel_loop("parallel_ind",str(len(inds)*6),use_thread_group)
             #     select_var_vals = [("int", "jid", [str(jid) for jid in inds])]
@@ -410,11 +380,8 @@ def gen_crba_inner(self, use_thread_group = False):
                 self.gen_add_code_line("int jid = " + str(jid) + ";")
             
                 self.gen_add_code_line("int jid6 = jid * 6; int row = parallel_ind % 6;")
-                #self.gen_add_code_line("int row = parallel_ind % 6; int col = (parallel_ind / 7) % 7;")
-                #self.gen_add_code_line("int curr_joint = s_inds[jid];")
                 self.gen_add_code_line("int curr_parent = s_parent_inds[jid];")
                 self.gen_add_code_line("s_fh[jid6 + row] = dot_prod<T,6,1,1>(&s_XImats[36*(curr_parent+1) + 6*row], &s_fh[jid6]);")
-
                 self.gen_add_end_control_flow()
                 self.gen_add_sync(use_thread_group)
 
@@ -424,31 +391,18 @@ def gen_crba_inner(self, use_thread_group = False):
                 self.gen_add_multi_threaded_select("parallel_ind", "< ", [str(6*(i+1)) for i in range(len(inds))], select_var_vals)
                 jid = "jid"
                 self.gen_add_code_line("int jidn = jid * " + str(n) + "; int jid6 = jid * 6;" )
-                #self.gen_add_code_line("int row = parallel_ind % 7; int col = (parallel_ind / 7) % 7;")
-                #self.gen_add_code_line("int curr_joint = s_inds[parallel_ind];")
-                #self.gen_add_code_line("int curr_parent = s_parent_inds[parallel_ind];")
-
-
                 self.gen_add_code_line("if((jid-1) != -1){")
                 self.gen_add_code_line("    s_M[jid-1 + jidn] = s_fh[jid6 + " + S_ind_cpp_par + "];") 
                 self.gen_add_code_line("    s_M[jid + (jid-1)*" + str(n) + "] = s_M[jid-1 + jidn];")
             else:
                 jid = str(inds[0])
-                self.gen_add_code_line("int jid = " + str(jid) + ";")
-            
+                self.gen_add_code_line("int jid = " + str(jid) + ";")        
                 self.gen_add_code_line("int jidn = jid * " + str(n) + "; int jid6 = jid * 6;" )
-                #self.gen_add_code_line("int row = parallel_ind % 7; int col = (parallel_ind / 7) % 7;")
-                #self.gen_add_code_line("int curr_joint = s_inds[parallel_ind];")
                 self.gen_add_code_line("int curr_parent = s_parent_inds[parallel_ind];")
-
-
                 self.gen_add_code_line("if(s_parent_inds[jid] != -1){")
                 self.gen_add_code_line("    s_M[jid + curr_parent*" + str(n) + "] = s_fh[jid6 + " + S_ind_cpp_par + "];")
                 self.gen_add_code_line("    s_M[curr_parent + jidn] = s_M[jid + curr_parent*" + str(n) + "];")
 
-
-                #self.gen_add_code_line("    if(s_j[jid] == " + str(S_ind_cpp) +"){s_M[jid + j_jid*7] = s_fh[jid];} else {s_M[jid + j_jid*7] = 0;}")
-                #self.gen_add_code_line("    s_M[j_jid + jid*7] = s_M[jid + j_jid*7];")
             self.gen_add_code_line("}")
             self.gen_add_end_control_flow()
             self.gen_add_sync(use_thread_group)       
@@ -697,67 +651,6 @@ def gen_crba_kernel(self, use_thread_group = False, single_call_timing = False):
 def gen_crba_host(self, mode = 0):
 
 
-
-    # default is to do the full kernel call -- options are for single timing or compute only kernel wrapper
-    """single_call_timing = True if mode == 1 else False
-    compute_only = True if mode == 2 else False
-
-    # define function def and params
-    func_params = ["hd_data is the packaged input and output pointers", \
-                   "d_robotModel is the pointer to the initialized model specific helpers on the GPU (XImats, topology_helpers, etc.)", \
-                   "gravity is the gravity constant,", \
-                   "num_timesteps is the length of the trajectory points we need to compute over (or overloaded as test_iters for timing)", \
-                   "streams are pointers to CUDA streams for async memory transfers (if needed)"]
-    func_notes = []
-    func_def_start = "void crba(gridData<T> *hd_data, const robotModel<T> *d_robotModel, const T gravity, const int num_timesteps,"
-    func_def_end =   "                      const dim3 block_dimms, const dim3 thread_dimms, cudaStream_t *streams) {"
-    if single_call_timing:
-        func_def_start = func_def_start.replace("(", "_single_timing(")
-        func_def_end = "              " + func_def_end
-    if compute_only:
-        func_def_start = func_def_start.replace("(", "_compute_only(")
-        func_def_end = "             " + func_def_end.replace(", cudaStream_t *streams", "")
-    # then generate the code
-    self.gen_add_func_doc("Compute the CRBA (Composite Rigid Body Algorithm)",\
-                          func_notes,func_params,None)
-    self.gen_add_code_line("template <typename T>")
-    self.gen_add_code_line("__host__")
-    self.gen_add_code_line(func_def_start)
-    self.gen_add_code_line(func_def_end, True)
-
-    func_call_start = "crba_kernel<T><<<block_dimms,thread_dimms,CRBA_SHARED_MEM_COUNT*sizeof(T)>>>(hd_data->d_M,hd_data->d_q_qd_u,stride_q_qd,"
-    func_call_end = "d_robotModel,gravity,num_timesteps);"
-    self.gen_add_code_line("int stride_q_qd = 3*NUM_JOINTS;")
-    if single_call_timing:
-        func_call_start = func_call_start.replace("kernel<T>","kernel_single_timing<T>")
-    if not compute_only:
-        # start code with memory transfer
-        self.gen_add_code_lines(["// start code with memory transfer", \
-                                 "gpuErrchk(cudaMemcpyAsync(hd_data->d_q_qd_u,hd_data->h_q_qd_u,stride_q_qd*" + \
-                                    ("num_timesteps*" if not single_call_timing else "") + "sizeof(T),cudaMemcpyHostToDevice,streams[0]));", \
-                                 "gpuErrchk(cudaDeviceSynchronize());"])
-    # then compute:
-    self.gen_add_code_line("// then call the kernel")
-    func_call = func_call_start + func_call_end
-    func_call_code = [func_call, "gpuErrchk(cudaDeviceSynchronize());"]
-    # wrap function call in timing (if needed)
-    if single_call_timing:
-        func_call_code.insert(0,"struct timespec start, end; clock_gettime(CLOCK_MONOTONIC,&start);")
-        func_call_code.append("clock_gettime(CLOCK_MONOTONIC,&end);")
-    self.gen_add_code_lines(func_call_code)
-    if not compute_only:
-        # then transfer memory back
-        self.gen_add_code_lines(["// finally transfer the result back", \
-                                "gpuErrchk(cudaMemcpy(hd_data->h_M,hd_data->d_qdd,NUM_JOINTS*" + \
-                                ("num_timesteps*" if not single_call_timing else "") + "sizeof(T),cudaMemcpyDeviceToHost));",
-                                "gpuErrchk(cudaDeviceSynchronize());"])
-    # finally report out timing if requested
-    if single_call_timing:
-        self.gen_add_code_line("printf(\"Single Call CRBA %fus\\n\",time_delta_us_timespec(start,end)/static_cast<double>(num_timesteps));")
-    self.gen_add_end_function()"""
-
-
-
     #old version that works for iiwa but not for hyq
     single_call_timing = True if mode == 1 else False
     compute_only = True if mode == 2 else False
@@ -834,6 +727,3 @@ def gen_crba(self, use_thread_group = False):
     self.gen_crba_host(0)
     self.gen_crba_host(1)
     self.gen_crba_host(2)
-
-
-    
