@@ -1,6 +1,6 @@
 def gen_forward_dynamics_inner_temp_mem_size(self):
         n = self.robot.get_num_pos()
-        return self.gen_direct_minv_inner_temp_mem_size() + n*n
+        return self.gen_direct_minv_inner_temp_mem_size() + n*n + 19*n + self.gen_inverse_dynamics_inner_temp_mem_size()
 
 def gen_forward_dynamics_finish_function_call(self, use_thread_group = False, updated_var_names = None):
     var_names = dict( \
