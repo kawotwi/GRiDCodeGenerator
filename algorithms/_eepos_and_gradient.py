@@ -265,7 +265,7 @@ def gen_end_effector_positions_host(self, mode = 0):
     self.gen_add_code_line("__host__")
     self.gen_add_code_line(func_def_start)
     self.gen_add_code_line(func_def_end, True)
-    func_call_start = "end_effector_positions_kernel<T><<<block_dimms,thread_dimms,EE_POS_SHARED_MEM_COUNT*sizeof(T)>>>(hd_data->d_eePos,hd_data->d_q,stride_q,"
+    func_call_start = "end_effector_positions_kernel<T><<<block_dimms,thread_dimms,EE_POS_DYNAMIC_SHARED_MEM_COUNT*sizeof(T)>>>(hd_data->d_eePos,hd_data->d_q,stride_q,"
     func_call_end = "d_robotModel,num_timesteps);"
     if single_call_timing:
         func_call_start = func_call_start.replace("kernel<T>","kernel_single_timing<T>")
@@ -309,7 +309,7 @@ def gen_end_effector_positions_host(self, mode = 0):
 def gen_end_effector_positions_gradient_inner_temp_mem_size(self):
     n = self.robot.get_num_pos()
     num_ees = self.robot.get_total_leaf_nodes()
-    return 2*16*num_ees*n
+    return 2*2*16*num_ees*n
 
 def gen_end_effector_positions_gradient_inner_function_call(self, use_thread_group = False, updated_var_names = None):
     var_names = dict( \
@@ -379,21 +379,24 @@ def gen_end_effector_positions_gradient_inner(self, use_thread_group = False):
     self.gen_add_code_line("// For each branch/gradient in parallel chain up the transform")
     self.gen_add_code_line("// Keep chaining until reaching the root (starting from the leaves)")
     self.gen_add_code_line("//")
+    self.gen_add_code_line("T *s_eeTemp = &s_temp[0]; T *s_deeTemp = &s_temp[" + str(2*16*num_ees*n) + "];")
     for bfs_level in range(n_bfs_levels): # at most bfs levels of parents to chain
         # if serial chain manipulator then this is easy
         if self.robot.is_serial_chain():
             self.gen_add_code_line("// Serial chain manipulator so optimize as parent is jid-1")
             if bfs_level == 0:
-                self.gen_add_code_line("// First set to leaf transform")
+                self.gen_add_code_line("// First set the leaf transforms for eePos and deePos")
                 self.gen_add_parallel_loop("ind",str(16*n),use_thread_group)
                 self.gen_add_code_line("int djid = ind / 16; int rc = ind % 16; int eeIndStart = 16*" + str(all_ees[0]) + ";")
-                self.gen_add_code_line("s_temp[ind] = (djid == " + str(all_ees[0]) + ") ? s_dXhom[eeIndStart + rc] : s_Xhom[eeIndStart + rc];")
+                self.gen_add_code_line("s_eeTemp[ind] = s_Xhom[eeIndStart + rc];")
+                self.gen_add_code_line("s_deeTemp[ind] = (djid == " + str(all_ees[0]) + ") ? s_dXhom[eeIndStart + rc] : s_Xhom[eeIndStart + rc];")
                 self.gen_add_end_control_flow()
                 self.gen_add_sync(use_thread_group)
                 if self.DEBUG_MODE:
                     self.gen_add_sync(use_thread_group)
                     self.gen_add_serial_ops(use_thread_group)
-                    self.gen_add_code_line("for (int i = 0; i < " + str(n) + "; i++){printf(\"dX_chain0[%d]\\n\",i); printMat<T,4,4>(&s_temp[16*i],4);}")
+                    self.gen_add_code_line("for (int i = 0; i < " + str(n) + "; i++){printf(\"X_chain0[%d]\\n\",i); printMat<T,4,4>(&s_eeTemp[16*i],4);}")
+                    self.gen_add_code_line("for (int i = 0; i < " + str(n) + "; i++){printf(\"dX_chain0[%d]\\n\",i); printMat<T,4,4>(&s_deeTemp[16*i],4);}")
                     self.gen_add_end_control_flow()
                     self.gen_add_sync(use_thread_group)
             else:
@@ -408,21 +411,24 @@ def gen_end_effector_positions_gradient_inner(self, use_thread_group = False):
                 even = bfs_level % 2
                 tempDstOffset = 16*n*(even)
                 tempSrcOffset = 16*n*(not even)
+                self.gen_add_code_line("s_eeTemp[ind + " + str(tempDstOffset) + "] = dot_prod<T,4,4,1>" + \
+                                       "(&s_Xhom[16*" + str(parent) + " + row], &s_eeTemp[" + str(tempSrcOffset) + " + colInd]);")
                 self.gen_add_code_line("const T *s_Xhom_dXhom = ((djid == " + str(parent) + ") ? s_dXhom : s_Xhom);")
-                self.gen_add_code_line("s_temp[ind + " + str(tempDstOffset) + "] = dot_prod<T,4,4,1>" + \
-                                       "(&s_Xhom_dXhom[16*" + str(parent) + " + row], &s_temp[" + str(tempSrcOffset) + " + colInd]);")
+                self.gen_add_code_line("s_deeTemp[ind + " + str(tempDstOffset) + "] = dot_prod<T,4,4,1>" + \
+                                       "(&s_Xhom_dXhom[16*" + str(parent) + " + row], &s_deeTemp[" + str(tempSrcOffset) + " + colInd]);")
                 self.gen_add_end_control_flow()
                 self.gen_add_sync(use_thread_group)
                 if self.DEBUG_MODE:
                     self.gen_add_sync(use_thread_group)
                     self.gen_add_serial_ops(use_thread_group)
-                    self.gen_add_code_line("for (int i = 0; i < " + str(n) + "; i++){printf(\"dX_chain[%d]\\n\",i); printMat<T,4,4>(&s_temp[16*i + " + str(tempDstOffset) + "],4);}")
+                    self.gen_add_code_line("for (int i = 0; i < " + str(n) + "; i++){printf(\"X_chain0[%d]\\n\",i); printMat<T,4,4>(&s_eeTemp[16*i + " + str(tempDstOffset) + "],4);}")
+                    self.gen_add_code_line("for (int i = 0; i < " + str(n) + "; i++){printf(\"dX_chain0[%d]\\n\",i); printMat<T,4,4>(&s_deeTemp[16*i + " + str(tempDstOffset) + "],4);}")
                     self.gen_add_end_control_flow()
                     self.gen_add_sync(use_thread_group)
         else:
             # if first loop then just set to transform at the leaf
             if bfs_level == 0:
-                self.gen_add_code_line("// First set to leaf transform")
+                self.gen_add_code_line("// First set the leaf transforms for eePos and deePos")
                 self.gen_add_parallel_loop("ind",str(16*n*num_ees),use_thread_group)
                 self.gen_add_code_line("int rc = ind % 16; int djid = (ind / 16) % " + str(n) + ";")
                 select_var_vals = [("int", "eeInd", [str(jid) for jid in all_ees])]
@@ -435,13 +441,15 @@ def gen_end_effector_positions_gradient_inner(self, use_thread_group = False):
                     jidChainCode.append(code)
                 select_var_vals.append(("bool", "inChain", jidChainCode))
                 self.gen_add_multi_threaded_select("ind", "<", [str(16*n*(i+1)) for i in range(num_ees)], select_var_vals)
-                self.gen_add_code_line("s_temp[ind] = inChain * ((djid == eeInd) ? s_dXhom[16*eeInd + rc] : s_Xhom[16*eeInd + rc]);")
+                self.gen_add_code_line("s_eeTemp[ind] = s_Xhom[16*eeInd + rc];")
+                self.gen_add_code_line("s_deeTemp[ind] = inChain * ((djid == eeInd) ? s_dXhom[16*eeInd + rc] : s_Xhom[16*eeInd + rc]);")
                 self.gen_add_end_control_flow()
                 self.gen_add_sync(use_thread_group)
                 if self.DEBUG_MODE:
                     self.gen_add_sync(use_thread_group)
                     self.gen_add_serial_ops(use_thread_group)
-                    self.gen_add_code_line("for (int i = 0; i < " + str(n*num_ees) + "; i++){printf(\"dX_chain level[%d] with dj_ee_id [%d]\\n\"," + str(bfs_level) + ",i); printMat<T,4,4>(&s_temp[16*i],4);}")
+                    self.gen_add_code_line("for (int i = 0; i < " + str(n*num_ees) + "; i++){printf(\"X_chain level[%d] with dj_ee_id [%d]\\n\"," + str(bfs_level) + ",i); printMat<T,4,4>(&s_eeTemp[16*i],4);}")
+                    self.gen_add_code_line("for (int i = 0; i < " + str(n*num_ees) + "; i++){printf(\"dX_chain level[%d] with dj_ee_id [%d]\\n\"," + str(bfs_level) + ",i); printMat<T,4,4>(&s_deeTemp[16*i],4);}")
                     self.gen_add_end_control_flow()
                     self.gen_add_sync(use_thread_group)
             else:
@@ -462,15 +470,18 @@ def gen_end_effector_positions_gradient_inner(self, use_thread_group = False):
                 self.gen_add_multi_threaded_select("ind", "<", [str(16*n*(i+1)) for i in range(num_ees)], select_var_vals)
                 if (-1 in curr_parents):
                     self.gen_add_code_line("if(parent_jid == -1){continue;}")
+                self.gen_add_code_line("s_eeTemp[ind + " + str(tempDstOffset) + "] = dot_prod<T,4,4,1>" + \
+                                       "(&s_Xhom[16*parent_jid + row], &s_eeTemp[" + str(tempSrcOffset) + " + colInd]);")
                 self.gen_add_code_line("const T *s_Xhom_dXhom = ((djid == parent_jid) ? s_dXhom : s_Xhom);")
-                self.gen_add_code_line("s_temp[ind + " + str(tempDstOffset) + "] = dot_prod<T,4,4,1>" + \
-                                       "(&s_Xhom_dXhom[16*parent_jid + row], &s_temp[" + str(tempSrcOffset) + " + colInd]);")
+                self.gen_add_code_line("s_deeTemp[ind + " + str(tempDstOffset) + "] = dot_prod<T,4,4,1>" + \
+                                       "(&s_Xhom_dXhom[16*parent_jid + row], &s_deeTemp[" + str(tempSrcOffset) + " + colInd]);")
                 self.gen_add_end_control_flow()
                 self.gen_add_sync(use_thread_group)
                 if self.DEBUG_MODE:
                     self.gen_add_sync(use_thread_group)
                     self.gen_add_serial_ops(use_thread_group)
-                    self.gen_add_code_line("for (int i = 0; i < " + str(n*num_ees) + "; i++){printf(\"dX_chain[%d]\\n\",i); printMat<T,4,4>(&s_temp[16*i + " + str(tempDstOffset) + "],4);}")
+                    self.gen_add_code_line("for (int i = 0; i < " + str(n*num_ees) + "; i++){printf(\"X_chain[%d]\\n\",i); printMat<T,4,4>(&s_eeTemp[16*i + " + str(tempDstOffset) + "],4);}")
+                    self.gen_add_code_line("for (int i = 0; i < " + str(n*num_ees) + "; i++){printf(\"dX_chain[%d]\\n\",i); printMat<T,4,4>(&s_deeTemp[16*i + " + str(tempDstOffset) + "],4);}")
                     self.gen_add_end_control_flow()
                     self.gen_add_sync(use_thread_group)
     
@@ -479,27 +490,27 @@ def gen_end_effector_positions_gradient_inner(self, use_thread_group = False):
     self.gen_add_code_line("// TODO: ADD OFFSETS")
     self.gen_add_code_line("//")
     tempOffset = 16*n*num_ees*(bfs_level % 2)
+    self.gen_add_parallel_loop("ind",str(6*n*num_ees),use_thread_group)
+    self.gen_add_code_line("int outputInd = ind % 6; int deeInd = ind / 6;")
+    self.gen_add_code_line("T *s_Xmat_hom = &s_eeTemp[" + str(tempOffset) + " + 16*deeInd]; T *s_dXmat_hom = &s_deeTemp[" + str(tempOffset) + " + 16*deeInd];")
     # xyz position is easy (eePos_xyz1 = Xmat_hom * offset) where offset = [x,y,z,1]
-    self.gen_add_parallel_loop("ind",str(3*n*num_ees),use_thread_group)
     self.gen_add_code_line("// xyz is easy")
-    self.gen_add_code_line("int xyzInd = ind % 3; int deeInd = ind / 3; T *s_Xmat_hom = &s_temp[" + str(tempOffset) + " + 16*deeInd];")
-    self.gen_add_code_line("s_deePos[6*deeInd + xyzInd] = s_Xmat_hom[12 + xyzInd];")
+    self.gen_add_code_line("if (outputInd < 3){s_deePos[6*deeInd + outputInd] = s_dXmat_hom[12 + outputInd];}")
     # roll pitch yaw is a bit more difficult
-    #
-    #
-    # TODO THESE ARE WRONG BECUASE THERE IS CHAIN RULE HERE
-    #
-    #
     self.gen_add_code_line("// roll pitch yaw is a bit more difficult")
-    self.gen_add_code_line("//")
-    self.gen_add_code_line("//")
-    self.gen_add_code_line("// TODO THESE ARE WRONG BECUASE THERE IS CHAIN RULE HERE")
-    self.gen_add_code_line("//")
-    self.gen_add_code_line("//")
-    self.gen_add_code_line("if(xyzInd > 0){continue;}")
-    self.gen_add_code_line("s_deePos[6*deeInd + 3] = atan2(s_Xmat_hom[6],s_Xmat_hom[10]);")
-    self.gen_add_code_line("s_deePos[6*deeInd + 4] = -atan2(s_Xmat_hom[2],sqrt(s_Xmat_hom[6]*s_Xmat_hom[6] + s_Xmat_hom[10]*s_Xmat_hom[10]));")
-    self.gen_add_code_line("s_deePos[6*deeInd + 5] = atan2(s_Xmat_hom[1],s_Xmat_hom[0]);")
+    self.gen_add_code_line("// note: d/dz of arctan2(y(z),x(z)) = [-x'(z)y(z)+x(z)y'(z)]/[(x(z)^2 + y(z)^2)]")
+    self.gen_add_code_line("// Also note that d/dz of sqrt(f(z)) = f'(z)/2sqrt(f(z))")
+    self.gen_add_code_line("else {", add_indent_after=True)
+    self.gen_add_code_line("// simpler to recompute")
+    self.gen_add_code_line("T sqrtTerm = sqrt(s_Xmat_hom[10]*s_Xmat_hom[10] + s_Xmat_hom[6]*s_Xmat_hom[6]);") 
+    self.gen_add_code_line("T dsqrtTerm = (s_Xmat_hom[10]*s_dXmat_hom[10] + s_Xmat_hom[6]*s_dXmat_hom[6])/sqrtTerm;")
+    select_var_vals = [("T", "y",       ["s_Xmat_hom[6]",  "-s_Xmat_hom[2]",  "s_Xmat_hom[1]"]), \
+                       ("T", "x",       ["s_Xmat_hom[10]",  "sqrtTerm",        "s_Xmat_hom[0]"]), \
+                       ("T", "y_prime", ["s_dXmat_hom[6]", "-s_dXmat_hom[2]", "s_dXmat_hom[1]"]), \
+                       ("T", "x_prime", ["s_dXmat_hom[10]", "dsqrtTerm",       "s_dXmat_hom[0]"])]
+    self.gen_add_multi_threaded_select("outputInd", "==", [str(i) for i in range(3,6)], select_var_vals)
+    self.gen_add_code_line("s_deePos[6*deeInd + outputInd] = (-x_prime*y + x*y_prime)/(x*x + y*y);")
+    self.gen_add_end_control_flow()
     self.gen_add_end_control_flow()
     self.gen_add_sync(use_thread_group)
     self.gen_add_end_function()
@@ -620,7 +631,7 @@ def gen_end_effector_positions_gradient_host(self, mode = 0):
     self.gen_add_code_line("__host__")
     self.gen_add_code_line(func_def_start)
     self.gen_add_code_line(func_def_end, True)
-    func_call_start = "end_effector_positions_gradient_kernel<T><<<block_dimms,thread_dimms,DEE_POS_SHARED_MEM_COUNT*sizeof(T)>>>(hd_data->d_deePos,hd_data->d_q,stride_q,"
+    func_call_start = "end_effector_positions_gradient_kernel<T><<<block_dimms,thread_dimms,DEE_POS_DYNAMIC_SHARED_MEM_COUNT*sizeof(T)>>>(hd_data->d_deePos,hd_data->d_q,stride_q,"
     func_call_end = "d_robotModel,num_timesteps);"
     if single_call_timing:
         func_call_start = func_call_start.replace("kernel<T>","kernel_single_timing<T>")
